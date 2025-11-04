@@ -68,7 +68,15 @@ public class Chunk
         mesh.uv = meshData.uvs.ToArray();
 
         meshFilter.mesh = mesh;
-        meshCollider.sharedMesh = mesh;
+
+        if (meshCollider != null)
+            meshCollider.sharedMesh = mesh;
+    }
+
+    public void AddMeshCollider()
+    {
+        meshCollider = gameObject.AddComponent<MeshCollider>();
+        meshCollider.sharedMesh = meshFilter.mesh;
     }
 
     public void SetBlock(Vector3 position, int id, bool update = true)
@@ -99,10 +107,6 @@ public class Chunk
                 if (left != null && blockPosition.x == 0) left.Update();
             }
         }
-        else
-        {
-            Debug.LogWarning("Position is outside of chunk: " + blockPosition);
-        }
     }
 
     public void Update()
@@ -118,7 +122,6 @@ public class Chunk
         gameObject = new GameObject("Chunk " + coordinate.x + " " + coordinate.z);
         meshFilter = gameObject.AddComponent<MeshFilter>();
         meshRenderer = gameObject.AddComponent<MeshRenderer>();
-        meshCollider = gameObject.AddComponent<MeshCollider>();
 
         meshRenderer.material = world.blockMaterial;
 
@@ -230,7 +233,7 @@ public class Chunk
                 }
 
                 int blockId = blocks[position.x, position.y, position.z];
-                BlockType blockType = world.blockTypes[blockId];
+                Block blockType = world.blockTypes[blockId];
                 AddTexture(blockType.GetTexture(face));
 
                 meshData.triangles.Add(vertexIndex);

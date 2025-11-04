@@ -6,10 +6,8 @@ using UnityEngine;
 public class WorldGenerator : MonoBehaviour
 {
     public Material blockMaterial;
+    public Block[] blockTypes;
 
-    public BlockType[] blockTypes;
-
-    public GameObject player;
 
     public int seed = 0;
     public bool addTrees = true;
@@ -18,8 +16,10 @@ public class WorldGenerator : MonoBehaviour
     public float noiseHeight = 10.0f;
     public int groundOffset = 10;
     internal int noiseOffset;
+    public float chunkUpdateThreshold = 1.0f;
 
-    List<Chunk> chunks = new List<Chunk>();
+    private List<Chunk> chunks = new List<Chunk>();
+    private Vector3 lastChunkUpdatePlayerPosition;
 
     void Start()
     {
@@ -36,15 +36,27 @@ public class WorldGenerator : MonoBehaviour
             }
         }
 
-        foreach(Chunk chunk in chunks)
+        foreach (Chunk chunk in chunks)
         {
             chunk.Update();
         }
     }
 
-    private void Update()
+    public void OnEnable()
     {
-        Vector3Int playerChunkCoordinate = GetChunkCoordinateFromPosition(player.transform.position);
+        PlayerManager.OnPlayerMove += UpdateChunks;
+    }
+    public void OnDisable()
+    {
+        PlayerManager.OnPlayerMove -= UpdateChunks;
+    }
+
+    public void UpdateChunks(Vector3 playerPosition)
+    {
+        if (Vector3.Distance(playerPosition, lastChunkUpdatePlayerPosition) < chunkUpdateThreshold)
+            return;
+
+        Vector3Int playerChunkCoordinate = GetChunkCoordinateFromPosition(playerPosition);
 
         // Add new chunks
         for (int x = -viewDistance; x < viewDistance; x++)
@@ -56,7 +68,7 @@ public class WorldGenerator : MonoBehaviour
 
                 Chunk targetChunk = GetChunkByCoordinate(chunkX, chunkZ);
 
-                if(targetChunk == null)
+                if (targetChunk == null)
                 {
                     Chunk chunk = new Chunk(chunkX, chunkZ, this);
                     chunk.Prepare();
@@ -64,22 +76,28 @@ public class WorldGenerator : MonoBehaviour
 
                     chunk.Update();
                 }
+                else if (targetChunk.meshCollider == null && playerChunkCoordinate == targetChunk.coordinate)
+                {
+                    targetChunk.AddMeshCollider();
+                }
             }
         }
 
         // Deactivate chunks out of sight
-        foreach(Chunk chunk in chunks)
+        foreach (Chunk chunk in chunks)
         {
             bool visible = Vector3Int.Distance(playerChunkCoordinate, chunk.coordinate) < viewDistance;
             chunk.gameObject.SetActive(visible);
         }
+
+        lastChunkUpdatePlayerPosition = playerPosition;
     }
 
     public int GetBlockAtPosition(Vector3 position)
     {
         Chunk chunk = GetChunkByPosition(position);
 
-        if(chunk != null)
+        if (chunk != null)
         {
             return chunk.GetBlockAtPosition(position - chunk.position);
         }
@@ -127,7 +145,7 @@ public class WorldGenerator : MonoBehaviour
     {
         Chunk chunk = GetChunkByPosition(position);
 
-        if(chunk != null)
+        if (chunk != null)
         {
             chunk.SetBlock(position - chunk.position, id);
         }
@@ -154,7 +172,7 @@ public class BlockType
 
     public int GetTexture(int face)
     {
-        switch(face)
+        switch (face)
         {
             case 0:
                 return backTexture;

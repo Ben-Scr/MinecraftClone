@@ -19,6 +19,10 @@ public class PlayerManager : MonoBehaviour
 
     CharacterController characterController;
 
+    public Block SelectedBlock;
+    public static Action<Vector3> OnPlayerMove;
+    private Vector3 lastPos;
+
     private void Awake()
     {
         characterController = GetComponent<CharacterController>();
@@ -26,6 +30,11 @@ public class PlayerManager : MonoBehaviour
 
     void Update()
     {
+        if(lastPos != transform.position)
+        {
+            OnPlayerMove?.Invoke(transform.position);
+        }
+
         if (highlightBlockVisible)
         {
             if (Input.GetMouseButtonDown(0))
@@ -46,12 +55,13 @@ public class PlayerManager : MonoBehaviour
 
                 if (!isSamePositionAsPlayer || (distanceToFeet > 1.0f && distanceToHead > 1.0f))
                 {
-                    world.SetBlock(placeBlockPosition, Chunk.BLOCK_LEAVES);
+                    world.SetBlock(placeBlockPosition, SelectedBlock.id);
                 }
             }
         }
 
         UpdateHighlightBlock();
+        lastPos = transform.position;
     }
 
     private void UpdateHighlightBlock()
