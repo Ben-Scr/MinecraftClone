@@ -5,6 +5,7 @@ public class Block : ScriptableObject
 {
     public int id;
     public int durability;
+    public bool isTransparent;
 
     public int backTexture;
     public int frontTexture;

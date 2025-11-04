@@ -6,7 +6,9 @@ using UnityEngine;
 public class PlayerManager : MonoBehaviour
 {
 
-    const float MAX_DISTANCE = 5;
+    [SerializeField] private float maxInteractionDistance = 5;
+    [SerializeField] private float minDistanceToHead = 0.8f;
+    [SerializeField] private float minDistanceToFeet = 0.8f;
 
     public WorldGenerator world;
 
@@ -17,24 +19,11 @@ public class PlayerManager : MonoBehaviour
 
     bool highlightBlockVisible = false;
 
-    CharacterController characterController;
 
-    public Block SelectedBlock;
-    public static Action<Vector3> OnPlayerMove;
-    private Vector3 lastPos;
-
-    private void Awake()
-    {
-        characterController = GetComponent<CharacterController>();
-    }
+    public Block selectedBlock;
 
     void Update()
     {
-        if(lastPos != transform.position)
-        {
-            OnPlayerMove?.Invoke(transform.position);
-        }
-
         if (highlightBlockVisible)
         {
             if (Input.GetMouseButtonDown(0))
@@ -47,21 +36,17 @@ public class PlayerManager : MonoBehaviour
                 bool isSamePositionAsPlayer = placeBlockPosition.x == Mathf.FloorToInt(transform.position.x) &&
                     placeBlockPosition.z == Mathf.FloorToInt(transform.position.z);
 
-                Vector3 feetPosition = new Vector3(transform.position.x, characterController.bounds.min.y, transform.position.z);
-                Vector3 headPosition = new Vector3(transform.position.x, characterController.bounds.max.y, transform.position.z);
 
-                float distanceToFeet = Vector3.Distance(feetPosition, placeBlockPosition + new Vector3(0.5f, 0.5f, 0.5f));
-                float distanceToHead = Vector3.Distance(headPosition, placeBlockPosition + new Vector3(0.5f, 0.5f, 0.5f));
+                bool overlapsWithPlayer = false;
 
-                if (!isSamePositionAsPlayer || (distanceToFeet > 1.0f && distanceToHead > 1.0f))
+                if (!isSamePositionAsPlayer || !overlapsWithPlayer)
                 {
-                    world.SetBlock(placeBlockPosition, SelectedBlock.id);
+                    world.SetBlock(placeBlockPosition, selectedBlock.id);
                 }
             }
         }
 
         UpdateHighlightBlock();
-        lastPos = transform.position;
     }
 
     private void UpdateHighlightBlock()
@@ -73,7 +58,7 @@ public class PlayerManager : MonoBehaviour
 
         Vector3 lastPosition = Vector3.zero;
 
-        while(distance < MAX_DISTANCE)
+        while(distance < maxInteractionDistance)
         {
             Vector3 position = Camera.main.transform.position +
                 Camera.main.transform.forward * distance;

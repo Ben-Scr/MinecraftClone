@@ -9,54 +9,74 @@ public class WorldGenerator : MonoBehaviour
     public Block[] blockTypes;
 
 
-    public int seed = 0;
+    [SerializeField] private int seed = 0;
+    public bool addColliders = false;
     public bool addTrees = true;
-    public int viewDistance = 5;
+    [SerializeField] private int viewDistance = 5;
     public float noiseScale = 20.0f;
     public float noiseHeight = 10.0f;
     public int groundOffset = 10;
-    internal int noiseOffset;
-    public float chunkUpdateThreshold = 1.0f;
+    internal Vector2 noiseOffset;
+    [SerializeField] private float chunkUpdateThreshold = 1.0f;
 
-    private List<Chunk> chunks = new List<Chunk>();
+
+    private Dictionary<Vector3Int, Chunk> chunks = new Dictionary<Vector3Int, Chunk>();
+    private HashSet<Chunk> lastActiveChunks = new HashSet<Chunk>();
+    private Queue<Vector3Int> chunksToCreate = new Queue<Vector3Int>();
     private Vector3 lastChunkUpdatePlayerPosition;
+    [SerializeField] private int maxChunksCreatedPerFrame = 2;
+
+    public static WorldGenerator instance;
+
+    private void Awake()
+    {
+        int resolution = 16;
+
+        Chunk.TEXTURE_BLOCKS_COLS = (int)(1f / blockMaterial.mainTexture.texelSize.x / resolution) + 1;
+        Chunk.TEXTURE_BLOCKS_ROWS = (int)(1f / blockMaterial.mainTexture.texelSize.y / resolution) + 1;
+        Chunk.BLOCK_W = 1f / Chunk.TEXTURE_BLOCKS_COLS;
+        Chunk.BLOCK_H = 1f / Chunk.TEXTURE_BLOCKS_ROWS;
+
+        Debug.Log(Chunk.TEXTURE_BLOCKS_COLS + " cols, " + Chunk.TEXTURE_BLOCKS_ROWS + " rows.");
+        instance = this;
+    }
 
     void Start()
     {
         UnityEngine.Random.InitState(seed);
-        noiseOffset = UnityEngine.Random.Range(-100000, 100000);
+        noiseOffset = new Vector2(UnityEngine.Random.Range(-100000f, 100000f), UnityEngine.Random.Range(-100000f, 100000f));
 
-        for (int x = -viewDistance; x < viewDistance; x++)
-        {
-            for (int z = -viewDistance; z < viewDistance; z++)
-            {
-                Chunk chunk = new Chunk(x, z, this);
-                chunk.Prepare();
-                chunks.Add(chunk);
-            }
-        }
+        //for (int x = -viewDistance; x < viewDistance; x++)
+        //{
+        //    for (int z = -viewDistance; z < viewDistance; z++)
+        //    {
+        //        Chunk chunk = new Chunk(x, z);
+        //        chunk.Prepare();
+        //        chunks.Add(chunk.coordinate, chunk);
+        //    }
+        //}
 
-        foreach (Chunk chunk in chunks)
-        {
-            chunk.Update();
-        }
+        //foreach (Chunk chunk in chunks.Values)
+        //{
+        //    chunk.Update();
+        //}
     }
 
-    public void OnEnable()
+    public void Update()
     {
-        PlayerManager.OnPlayerMove += UpdateChunks;
-    }
-    public void OnDisable()
-    {
-        PlayerManager.OnPlayerMove -= UpdateChunks;
+        UpdateChunks(PlayerController.instance.transform.position);
     }
 
     public void UpdateChunks(Vector3 playerPosition)
     {
-        if (Vector3.Distance(playerPosition, lastChunkUpdatePlayerPosition) < chunkUpdateThreshold)
+        bool playerMoveTheshold = Vector3.Distance(playerPosition, lastChunkUpdatePlayerPosition) < chunkUpdateThreshold;
+
+        if (playerMoveTheshold && chunksToCreate.Count == 0)
             return;
 
         Vector3Int playerChunkCoordinate = GetChunkCoordinateFromPosition(playerPosition);
+
+        HashSet<Chunk> currentActiveChunks = new HashSet<Chunk>(viewDistance * viewDistance);
 
         // Add new chunks
         for (int x = -viewDistance; x < viewDistance; x++)
@@ -70,26 +90,45 @@ public class WorldGenerator : MonoBehaviour
 
                 if (targetChunk == null)
                 {
-                    Chunk chunk = new Chunk(chunkX, chunkZ, this);
-                    chunk.Prepare();
-                    chunks.Add(chunk);
-
-                    chunk.Update();
+                    Vector3Int coordinate = new Vector3Int(chunkX, 0, chunkZ);
+                    if (!chunksToCreate.Contains(coordinate))
+                        chunksToCreate.Enqueue(coordinate);
                 }
-                else if (targetChunk.meshCollider == null && playerChunkCoordinate == targetChunk.coordinate)
+                else
                 {
-                    targetChunk.AddMeshCollider();
+                    currentActiveChunks.Add(targetChunk);
+
+                    if (addColliders && targetChunk.meshCollider == null && Vector2.Distance(new Vector2(playerPosition.x, playerPosition.z), new Vector2(targetChunk.position.x, targetChunk.position.z)) <= Chunk.CHUNK_SIZE + 5)
+                    {
+                        targetChunk.AddMeshCollider();
+                    }
                 }
             }
         }
 
-        // Deactivate chunks out of sight
-        foreach (Chunk chunk in chunks)
+        for (int i = 0; i < Math.Min(chunksToCreate.Count, maxChunksCreatedPerFrame); i++)
         {
-            bool visible = Vector3Int.Distance(playerChunkCoordinate, chunk.coordinate) < viewDistance;
-            chunk.gameObject.SetActive(visible);
+            Vector3Int coordinate = chunksToCreate.Dequeue();
+            Chunk targetChunk = new Chunk(coordinate.x, coordinate.z);
+            targetChunk.Prepare();
+            chunks.Add(targetChunk.coordinate, targetChunk);
+            targetChunk.Update();
+            currentActiveChunks.Add(targetChunk);
         }
 
+        if (playerMoveTheshold)
+        {
+            // Deactivate chunks out of sight
+            foreach (Chunk chunk in lastActiveChunks)
+            {
+                bool visible = Vector3Int.Distance(playerChunkCoordinate, chunk.coordinate) < viewDistance;
+                chunk.gameObject.SetActive(visible);
+            }
+
+            lastActiveChunks = currentActiveChunks;
+        }
+
+        currentActiveChunks.Clear();
         lastChunkUpdatePlayerPosition = playerPosition;
     }
 
@@ -107,12 +146,9 @@ public class WorldGenerator : MonoBehaviour
 
     public Chunk GetChunkByCoordinate(int chunkX, int chunkZ)
     {
-        foreach (Chunk chunk in chunks)
+        if (chunks.TryGetValue(new Vector3Int(chunkX, 0, chunkZ), out Chunk chunk))
         {
-            if (chunk.coordinate.x == chunkX && chunk.coordinate.z == chunkZ)
-            {
-                return chunk;
-            }
+            return chunk;
         }
 
         return null;
@@ -130,12 +166,9 @@ public class WorldGenerator : MonoBehaviour
     {
         Vector3Int coordinate = GetChunkCoordinateFromPosition(position);
 
-        foreach (Chunk chunk in chunks)
+        if (chunks.TryGetValue(new Vector3Int(coordinate.x, coordinate.y, coordinate.z), out Chunk chunk))
         {
-            if (chunk.coordinate.x == coordinate.x && chunk.coordinate.z == coordinate.z)
-            {
-                return chunk;
-            }
+            return chunk;
         }
 
         return null;
