@@ -241,7 +241,9 @@ public class WorldGenerator : MonoBehaviour
         return chunks.ContainsKey(new Vector3Int(chunkCoord.x + 1, 0, chunkCoord.z)) &&
                chunks.ContainsKey(new Vector3Int(chunkCoord.x - 1, 0, chunkCoord.z)) &&
                chunks.ContainsKey(new Vector3Int(chunkCoord.x, 0, chunkCoord.z + 1)) &&
-               chunks.ContainsKey(new Vector3Int(chunkCoord.x, 0, chunkCoord.z - 1));
+               chunks.ContainsKey(new Vector3Int(chunkCoord.x, 0, chunkCoord.z - 1)) &&
+               chunks.ContainsKey(new Vector3Int(chunkCoord.x, chunkCoord.y - 1, chunkCoord.z)) &&
+               chunks.ContainsKey(new Vector3Int(chunkCoord.x, chunkCoord.y + 1, chunkCoord.z));
     }
 
     public void RequestMeshData(byte[,,] haloBlocks, Action<ChunkMeshData> callback)

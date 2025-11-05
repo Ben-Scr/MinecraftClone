@@ -30,7 +30,7 @@ public class PlayerManager : MonoBehaviour
                 world.SetBlock(highlightPosition, Chunk.BLOCK_AIR);
             }
 
-            if(Input.GetMouseButtonDown(1))
+            if (Input.GetMouseButtonDown(1))
             {
                 Vector3 center = placeBlockPosition + new Vector3(0.5f, 0.5f, 0.5f);
                 bool overlapsWithPlayer = Physics.CheckBox(center, HalfExtents, Quaternion.identity, LayerMask.GetMask("Player"));
@@ -54,7 +54,7 @@ public class PlayerManager : MonoBehaviour
 
         Vector3 lastPosition = Vector3.zero;
 
-        while(distance < maxInteractionDistance)
+        while (distance < maxInteractionDistance)
         {
             Vector3 position = Camera.main.transform.position +
                 Camera.main.transform.forward * distance;
@@ -65,8 +65,12 @@ public class PlayerManager : MonoBehaviour
                    Mathf.FloorToInt(position.z)
                    );
 
-            if (world.GetBlockAtPosition(position) != Chunk.BLOCK_AIR)
+            int blockID = world.GetBlockAtPosition(highlightPosition);
+            if (blockID != Chunk.BLOCK_AIR)
             {
+                if (Input.GetKeyDown(KeyCode.E))
+                    Debug.Log(WorldGenerator.instance.blockTypes[blockID].name);
+
                 highlightBlock.transform.position = highlightPosition + new Vector3(0.5f, 0.5f, 0.5f);
 
                 highlightBlockVisible = true;
