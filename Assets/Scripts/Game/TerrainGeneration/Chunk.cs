@@ -1,13 +1,8 @@
-using System.Collections.Generic;
-using System.Linq;
-using Unity.Burst;
+using System.Diagnostics;
 using Unity.Collections;
 using Unity.Jobs;
 using Unity.Mathematics;
 using UnityEngine;
-using UnityEngine.LightTransport;
-using UnityEngine.Rendering;
-using UnityEngine.Tilemaps;
 
 public class Chunk
 {
@@ -56,7 +51,7 @@ public class Chunk
                     Mathf.FloorToInt(position.z)
             );
 
-        if (IsInsideChunk(blockPosition.x, blockPosition.y, blockPosition.z))
+        if (ChunkUtility.IsInsideChunk(blockPosition))
         {
             blocks[blockPosition.x, blockPosition.y, blockPosition.z] = (byte)id;
 
@@ -64,10 +59,10 @@ public class Chunk
             {
                 Generate();
 
-                Chunk front = TerrainGenerator.instance.GetChunkByCoordinate(coordinate.x, coordinate.y,coordinate.z + 1);
-                Chunk back = TerrainGenerator.instance.GetChunkByCoordinate(coordinate.x, coordinate.y, coordinate.z - 1);
-                Chunk right = TerrainGenerator.instance.GetChunkByCoordinate(coordinate.x + 1, coordinate.y, coordinate.z);
-                Chunk left = TerrainGenerator.instance.GetChunkByCoordinate(coordinate.x - 1, coordinate.y, coordinate.z);
+                Chunk front = ChunkUtility.GetChunkByCoordinate(coordinate.x, coordinate.y, coordinate.z + 1);
+                Chunk back = ChunkUtility.GetChunkByCoordinate(coordinate.x, coordinate.y, coordinate.z - 1);
+                Chunk right = ChunkUtility.GetChunkByCoordinate(coordinate.x + 1, coordinate.y, coordinate.z);
+                Chunk left = ChunkUtility.GetChunkByCoordinate(coordinate.x - 1, coordinate.y, coordinate.z);
 
                 if (front != null && blockPosition.z == CHUNK_SIZE - 1) front.Generate();
                 if (back != null && blockPosition.z == 0) back.Generate();
@@ -101,7 +96,7 @@ public class Chunk
         blocks = new byte[CHUNK_SIZE, CHUNK_HEIGHT, CHUNK_SIZE];
         NativeArray<float> heightMap = new NativeArray<float>(CHUNK_SIZE * CHUNK_SIZE, Allocator.TempJob, NativeArrayOptions.UninitializedMemory);
 
-        try
+        try // Max sw time: 2 ms
         {
             TerrainGenerator.instance.GetNoiseLayers(out var continentLayer, out var mountainLayer, out var detailLayer, out var ridgeLayer);
 
@@ -122,6 +117,8 @@ public class Chunk
 
             JobHandle heightHandle = heightJob.Schedule(heightMap.Length, 64);
             heightHandle.Complete();
+
+
 
             for (int x = 0; x < CHUNK_SIZE; x++)
             {
@@ -192,8 +189,8 @@ public class Chunk
 
         for (int i = 0; i < height; i++)
         {
-            if(IsInsideChunk(x, y + i, z))
-            blocks[x, y + i, z] = BLOCK_WOOD;
+            if (ChunkUtility.IsInsideChunk(new Vector3Int(x, y + i, z)))
+                blocks[x, y + i, z] = BLOCK_WOOD;
         }
 
         int treeHeadRadius = UnityEngine.Random.Range(4, 6);
@@ -209,7 +206,7 @@ public class Chunk
 
                     if ((blockPos - center).magnitude < treeHeadRadius)
                     {
-                        if (IsInsideChunk(blockPos.x, blockPos.y, blockPos.z))
+                        if (ChunkUtility.IsInsideChunk(blockPos))
                             blocks[blockPos.x, blockPos.y, blockPos.z] = BLOCK_LEAVES;
                     }
                 }
@@ -219,11 +216,42 @@ public class Chunk
 
     private void RequestMeshData()
     {
-        TerrainGenerator.instance.RequestMeshData(BuildHaloBlockArray(), OnMeshDataReceived);
+        Stopwatch sw = Stopwatch.StartNew();
+        ChunkMeshGenerator.RequestMeshData(BuildHaloBlockArray(), OnMeshDataReceived);
+        UnityEngine.Debug.Log(sw.ElapsedMilliseconds + " ms to prepare chunk at " + coordinate);
     }
 
-    private void OnMeshDataReceived(ChunkMeshData meshData)
+    public byte[,,] BuildHaloBlockArray()
     {
+        const int SX = CHUNK_SIZE, SY = CHUNK_HEIGHT, SZ = CHUNK_SIZE;
+
+        int originX = coordinate.x * SX;
+        int originY = coordinate.y * SY;
+        int originZ = coordinate.z * SZ;
+
+        var halo = new byte[SX + 2, SY + 2, SZ + 2];
+
+        for (int x = 0; x < SX + 2; x++)
+        {
+            int wx = originX + x - 1;
+            for (int z = 0; z < SZ + 2; z++)
+            {
+                int wz = originZ + z - 1;
+                for (int y = 0; y < SY + 2; y++)
+                {
+                    int wy = originY + y - 1;
+                    halo[x, y, z] = (byte)ChunkUtility.GetBlockAtPosition(new Vector3(wx, wy, wz));
+                }
+            }
+        }
+
+        return halo;
+    }
+
+    private void OnMeshDataReceived([ReadOnly] ChunkMeshData meshData)
+    {
+        if (meshFilter == null) return;
+
         Mesh mesh = new Mesh();
         mesh.vertices = meshData.vertices;
         mesh.normals = meshData.normals;
@@ -233,41 +261,6 @@ public class Chunk
 
         if (meshCollider != null)
             meshCollider.sharedMesh = mesh;
-    }
-
-    public byte[,,] BuildHaloBlockArray()
-    {
-        int SX = CHUNK_SIZE, SY = CHUNK_HEIGHT, SZ = CHUNK_SIZE;
-
-        int originX = coordinate.x * SX;
-        int originY = coordinate.y * SY;
-        int originZ = coordinate.z * SZ;
-
-        var halo = new byte[SX + 2, SY + 2, SZ + 2];
-
-        for (int x = -1; x <= SX; x++)
-            for (int y = -1; y <= SY; y++)
-                for (int z = -1; z <= SZ; z++)
-                {
-                    var wx = originX + x;
-                    var wy = originY + y;
-                    var wz = originZ + z;
-                    byte id = (byte)TerrainGenerator.instance.GetBlockAtPosition(new Vector3(wx, wy, wz));
-                    halo[x + 1, y + 1, z + 1] = id;
-                }
-
-        return halo;
-    }
-
-    bool IsInsideChunk(int x, int y, int z)
-    {
-        if (x < 0 || y < 0 || z < 0 ||
-            x > CHUNK_SIZE - 1 || y > CHUNK_HEIGHT - 1 || z > CHUNK_SIZE - 1)
-        {
-            return false;
-        }
-
-        return true;
     }
 
     public void SetActive(bool enabled)
