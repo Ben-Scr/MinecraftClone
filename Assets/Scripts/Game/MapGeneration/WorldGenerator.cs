@@ -3,6 +3,7 @@ using System.Collections;
 using System.Collections.Concurrent;
 using System.Collections.Generic;
 using System.ComponentModel;
+using System.Linq;
 using System.Threading;
 using UnityEngine;
 using UnityEngine.UIElements;
@@ -143,7 +144,7 @@ public class WorldGenerator : MonoBehaviour
     public void UpdateChunks(Vector3 playerPosition)
     {
         bool movedEnough = (playerPosition - lastChunkUpdatePlayerPosition).sqrMagnitude >= chunkUpdateThresholdSq;
-        if (!movedEnough && chunksToCreate.Count == 0)
+        if (!movedEnough && chunksToCreate.Count == 0 && chunksToGenerate.Count == 0)
             return;
 
         Vector3Int playerChunk = GetChunkCoordinateFromPosition(playerPosition);
@@ -181,7 +182,7 @@ public class WorldGenerator : MonoBehaviour
                     float distanceZ = playerPosition.z - chunk.position.z;
 
                     float maxDistance = Chunk.CHUNK_SIZE + 5f;
-                    if (distanceX * distanceX + distanceZ * distanceZ <= maxDistance * maxDistance)
+                    if (distanceX * distanceX + distanceZ * distanceZ + distanceY * distanceY <= maxDistance * maxDistance)
                         chunk.AddMeshCollider();
                 }
             }
@@ -259,6 +260,7 @@ public class WorldGenerator : MonoBehaviour
         ChunkMeshData meshData = GenerateMeshData(haloBlocks);
         meshDataThreadInfoQueue.Enqueue(new MapThreadInfo<ChunkMeshData>(callback, meshData));
     }
+ 
 
     public ChunkMeshData GenerateMeshData(byte[,,] haloBlocks)
     {
@@ -276,7 +278,7 @@ public class WorldGenerator : MonoBehaviour
                 for (int z = 0; z < Chunk.CHUNK_SIZE; z++)
                 {
                     int blockId = haloBlocks[x + 1, y + 1, z + 1];
-                    Block block = WorldGenerator.instance.blockTypes[blockId];
+                    Block block = blockTypes[blockId];
 
                     if (blockId != Chunk.BLOCK_AIR)
                     {
@@ -286,7 +288,7 @@ public class WorldGenerator : MonoBehaviour
                         {
                             int neighborBlock = GetHalo(haloBlocks, position + Chunk.cubeNormals[face]);
 
-                            if (neighborBlock == Chunk.BLOCK_AIR || neighborBlock == Chunk.BLOCK_LEAVES)
+                            if (neighborBlock == Chunk.BLOCK_AIR /*|| neighborBlock == Chunk.BLOCK_LEAVES*/)
                             {
                                 vertices.Add(position + Chunk.cubeVertices[Chunk.cubeTriangles[face, 0]]);
                                 vertices.Add(position + Chunk.cubeVertices[Chunk.cubeTriangles[face, 1]]);

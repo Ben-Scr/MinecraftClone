@@ -18,20 +18,30 @@ public class PlayerManager : MonoBehaviour
 
     bool highlightBlockVisible = false;
 
+    [SerializeField] private float breakBlockCooldown = 0.1f;
+    [SerializeField] private float placeBlockCooldown = 0.1f;
+
+    private float breakBlockTimer = 0f;
+    private float placeBlockTimer = 0f;
 
     public Block selectedBlock;
 
     void Update()
     {
+        breakBlockTimer += Time.deltaTime;
+        placeBlockTimer += Time.deltaTime;
+
         if (highlightBlockVisible)
         {
-            if (Input.GetMouseButtonDown(0))
+            if (Input.GetMouseButton(0) && breakBlockTimer > breakBlockCooldown)
             {
+                breakBlockTimer = 0f;
                 world.SetBlock(highlightPosition, Chunk.BLOCK_AIR);
             }
 
-            if (Input.GetMouseButtonDown(1))
+            if (Input.GetMouseButton(1) && placeBlockTimer > placeBlockCooldown)
             {
+                placeBlockTimer = 0f;
                 Vector3 center = placeBlockPosition + new Vector3(0.5f, 0.5f, 0.5f);
                 bool overlapsWithPlayer = Physics.CheckBox(center, HalfExtents, Quaternion.identity, LayerMask.GetMask("Player"));
 

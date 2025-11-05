@@ -59,9 +59,7 @@ public class PlayerController : MonoBehaviour
     {
         inputSpace += Time.deltaTime;
 
-        Vector3 input = GetInput();
-        float velocityY = Mathf.Clamp(isFlying ? input.y : rb.linearVelocity.y, minVelocityY, maxVelocityY);
-        rb.linearVelocity = new Vector3(input.x, velocityY, input.z);
+        Movement();
 
         Vector3 eulerAnglesY = playerMeshTr.eulerAngles;
         Vector3 eulerAnglesX = playerCamera.transform.eulerAngles;
@@ -111,6 +109,19 @@ public class PlayerController : MonoBehaviour
             SetSpectatorMode();
         }
     }
+
+    private void Movement()
+    {
+        Vector3 input = GetInput();
+        float velocityY = Mathf.Clamp(isFlying ? input.y : rb.linearVelocity.y, minVelocityY, maxVelocityY);
+        input.y = velocityY;
+
+        if (!isSpectator)
+            rb.linearVelocity = input;
+        else
+            transform.position += input * Time.deltaTime;
+    }
+
     public void SetFlyingMode()
     {
         movementMode = movementMode == MovementMode.Default ? MovementMode.Flying : MovementMode.Default;
@@ -132,6 +143,7 @@ public class PlayerController : MonoBehaviour
     {
         if (!isFlying || isSpectator) SetFlyingMode();
         boxCollider.enabled = !isFlying;
+        rb.constraints = isFlying ? RigidbodyConstraints.FreezeAll : RigidbodyConstraints.None;
     }
 
     public void Jump()

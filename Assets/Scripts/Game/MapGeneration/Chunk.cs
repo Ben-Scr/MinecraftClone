@@ -133,8 +133,6 @@ public class Chunk
                     }
                 }
         }
-
-        return;
     }
 
     private void AddTree(int x, int y, int z)
@@ -143,7 +141,8 @@ public class Chunk
 
         for (int i = 0; i < height; i++)
         {
-            SetBlock(new Vector3(x, y + i, z), BLOCK_WOOD, false);
+            if(IsInsideChunk(x, y + i, z))
+            blocks[x, y + i, z] = BLOCK_WOOD;
         }
 
         int treeHeadRadius = UnityEngine.Random.Range(4, 6);
@@ -159,7 +158,8 @@ public class Chunk
 
                     if ((blockPos - center).magnitude < treeHeadRadius)
                     {
-                        SetBlock(new Vector3(blockPos.x, blockPos.y, blockPos.z), BLOCK_LEAVES, false);
+                        if (IsInsideChunk(blockPos.x, blockPos.y, blockPos.z))
+                            blocks[blockPos.x, blockPos.y, blockPos.z] = BLOCK_LEAVES;
                     }
                 }
             }
@@ -222,24 +222,6 @@ public class Chunk
 
         return true;
     }
-
-
-    //public int GetBlockAtPosition(Vector3 position)
-    //{
-    //    int x = Mathf.FloorToInt(position.x);
-    //    int y = Mathf.FloorToInt(position.y);
-    //    int z = Mathf.FloorToInt(position.z);
-
-    //    bool outOfBoundsXZ = x < 0 || z < 0 || x > CHUNK_SIZE - 1 || z > CHUNK_SIZE - 1;
-    //    bool outOfBoundsY = y < 0 || y > CHUNK_HEIGHT - 1;
-
-    //    if (outOfBoundsY || outOfBoundsXZ)
-    //    {
-    //        return WorldGenerator.instance.GetBlockAtPosition(position);
-    //    }
-
-    //    return blocks[x, y, z];
-    //}
 
     public void SetActive(bool enabled)
     {
