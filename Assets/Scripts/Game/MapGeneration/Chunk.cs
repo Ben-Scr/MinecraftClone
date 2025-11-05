@@ -1,5 +1,10 @@
 using System.Collections.Generic;
+using Unity.Burst;
+using Unity.Collections;
+using Unity.Jobs;
+using Unity.Mathematics;
 using UnityEngine;
+using UnityEngine.Tilemaps;
 
 public class Chunk
 {
@@ -10,6 +15,8 @@ public class Chunk
     public static int TEXTURE_BLOCKS_COLS;
     public static float BLOCK_W;
     public static float BLOCK_H;
+    public static float TEXTURE_WIDTH;
+    public static float TEXTURE_HEIGHT;
 
     // Block types
     public const int BLOCK_AIR = 0;
@@ -21,6 +28,7 @@ public class Chunk
 
     public byte[,,] blocks;
 
+    public bool isGenerated = false;
     public GameObject gameObject;
     public MeshRenderer meshRenderer;
     public MeshFilter meshFilter;
@@ -35,37 +43,6 @@ public class Chunk
     public Chunk(int x, int z)
     {
         coordinate = new Vector3Int(x, 0, z); // ERROR: CUBIC
-    }
-
-    private void GenerateCubes()
-    {
-        for (int x = 0; x < CHUNK_SIZE; x++)
-        {
-            for (int z = 0; z < CHUNK_SIZE; z++)
-            {
-                for (int y = 0; y < CHUNK_HEIGHT; y++)
-                {
-                    int blockType = blocks[x, y, z];
-
-                    if (blockType != BLOCK_AIR)
-                    {
-                        Vector3Int relativePosition = new Vector3Int(x, y, z);
-                        GenerateCube(relativePosition);
-                    }
-                }
-            }
-        }
-
-        Mesh mesh = new Mesh();
-        mesh.vertices = meshData.vertices.ToArray();
-        mesh.normals = meshData.normals.ToArray();
-        mesh.triangles = meshData.triangles.ToArray();
-        mesh.uv = meshData.uvs.ToArray();
-
-        meshFilter.mesh = mesh;
-
-        if (meshCollider != null)
-            meshCollider.sharedMesh = mesh;
     }
 
     public void AddMeshCollider()
@@ -88,7 +65,7 @@ public class Chunk
 
             if (update)
             {
-                Update();
+                Generate();
 
                 // Update neighbors
                 Chunk front = WorldGenerator.instance.GetChunkByCoordinate(coordinate.x, coordinate.z + 1);
@@ -96,27 +73,28 @@ public class Chunk
                 Chunk right = WorldGenerator.instance.GetChunkByCoordinate(coordinate.x + 1, coordinate.z);
                 Chunk left = WorldGenerator.instance.GetChunkByCoordinate(coordinate.x - 1, coordinate.z);
 
-                if (front != null && blockPosition.z == CHUNK_SIZE - 1) front.Update();
-                if (back != null && blockPosition.z == 0) back.Update();
-                if (right != null && blockPosition.x == CHUNK_SIZE - 1) right.Update();
-                if (left != null && blockPosition.x == 0) left.Update();
+                if (front != null && blockPosition.z == CHUNK_SIZE - 1) front.Generate();
+                if (back != null && blockPosition.z == 0) back.Generate();
+                if (right != null && blockPosition.x == CHUNK_SIZE - 1) right.Generate();
+                if (left != null && blockPosition.x == 0) left.Generate();
             }
         }
     }
 
-    public void Update()
+    public void Generate()
     {
         meshData = new MeshData();
         vertexIndex = 0;
 
         GenerateCubes();
+        isGenerated = true;
     }
 
     public void Prepare()
     {
-        gameObject = new GameObject("Chunk " + coordinate.x + " " + coordinate.z);
-        meshFilter = gameObject.AddComponent<MeshFilter>();
-        meshRenderer = gameObject.AddComponent<MeshRenderer>();
+        gameObject = GameObject.Instantiate(WorldGenerator.instance.chunkPrefab);
+        meshFilter = gameObject.GetComponent<MeshFilter>();
+        meshRenderer = gameObject.GetComponent<MeshRenderer>();
 
         meshRenderer.material = WorldGenerator.instance.blockMaterial;
         gameObject.transform.position = new Vector3(coordinate.x * CHUNK_SIZE, 0, coordinate.z * CHUNK_SIZE);
@@ -124,7 +102,6 @@ public class Chunk
 
         PrepareCubes();
     }
-
     private void PrepareCubes()
     {
         blocks = new byte[CHUNK_SIZE, CHUNK_HEIGHT, CHUNK_SIZE];
@@ -149,77 +126,19 @@ public class Chunk
             for (int x = 4; x < CHUNK_SIZE - 4; x++)
                 for (int z = 4; z < CHUNK_SIZE - 4; z++)
                 {
-                    // Oberfläche finden: höchstes y mit GRASS und darüber AIR
-                    for (int y = CHUNK_HEIGHT - 2; y >= 1; y--)
+                    for (int y = CHUNK_HEIGHT - 7; y >= 1; y--)
                     {
                         if (blocks[x, y, z] == BLOCK_GRASS && blocks[x, y + 1, z] == BLOCK_AIR)
                         {
                             if (UnityEngine.Random.Range(0, 50) == 0)
-                                AddTree(x, y + 1, z);   // jetzt wird nichts mehr überschrieben
-                            break; // für diese Säule fertig
+                                AddTree(x, y + 1, z);
+                            break;
                         }
                     }
                 }
         }
 
         return;
-        byte[,] groundLevelMap = null;
-        Noise.GenerateGroundLevelMap(ref groundLevelMap, position, world.noiseHeight, world.noiseScale, world.noiseOffset, world.groundOffset);
-        for (int x = 0; x < CHUNK_SIZE; x++)
-        {
-            for (int z = 0; z < CHUNK_SIZE; z++)
-            {
-                byte groundLevel = groundLevelMap[x, z];
-
-                for (int y = 0; y < CHUNK_HEIGHT; y++)
-                {
-                    if (blocks[x, y, z] != BLOCK_AIR) continue;
-
-                    if (y > groundLevel)
-                    {
-                        blocks[x, y, z] = BLOCK_AIR;
-                    }
-                    else
-                    {
-                        if (y == groundLevel)
-                        {
-                            if (x == 0 || z == 0 || x == CHUNK_SIZE - 1 || z == CHUNK_SIZE - 1)
-                            {
-                                blocks[x, y, z] = BLOCK_STONE;
-                                blocks[x, y + 1, z] = BLOCK_STONE;
-                                blocks[x, y + 2, z] = BLOCK_STONE;
-                                blocks[x, y + 3, z] = BLOCK_STONE;
-                                blocks[x, y + 4, z] = BLOCK_STONE;
-                            }
-                            else
-                                blocks[x, y, z] = BLOCK_GRASS;
-
-                            if (world.addTrees)
-                            {
-                                if (x > 3 && z > 3 && x < CHUNK_SIZE - 3 && z < CHUNK_SIZE - 3)
-                                {
-                                    if (UnityEngine.Random.Range(0, 50) == 0)
-                                    {
-                                        AddTree(x, y + 1, z);
-                                    }
-                                }
-                            }
-                        }
-                        else
-                        {
-                            if (y > groundLevel - 5)
-                            {
-                                blocks[x, y, z] = BLOCK_DIRT;
-                            }
-                            else
-                            {
-                                blocks[x, y, z] = BLOCK_STONE;
-                            }
-                        }
-                    }
-                }
-            }
-        }
     }
 
     private void AddTree(int x, int y, int z)
@@ -249,6 +168,40 @@ public class Chunk
                 }
             }
         }
+    }
+
+    private void GenerateCubes()
+    {
+        WorldGenerator.instance.RequestMeshData(BuildHaloBlockArray(), OnMeshDataReceived);
+        return;
+        for (int x = 0; x < CHUNK_SIZE; x++)
+        {
+            for (int z = 0; z < CHUNK_SIZE; z++)
+            {
+                for (int y = 0; y < CHUNK_HEIGHT; y++)
+                {
+                    int blockType = blocks[x, y, z];
+
+                    if (blockType != BLOCK_AIR)
+                    {
+                        Vector3Int relativePosition = new Vector3Int(x, y, z);
+                        GenerateCube(relativePosition);
+                    }
+                }
+            }
+        }
+
+
+        Mesh mesh = new Mesh();
+        mesh.vertices = meshData.vertices.ToArray();
+        mesh.normals = meshData.normals.ToArray();
+        mesh.triangles = meshData.triangles.ToArray();
+        mesh.uv = meshData.uvs.ToArray();
+
+        meshFilter.mesh = mesh;
+
+        if (meshCollider != null)
+            meshCollider.sharedMesh = mesh;
     }
 
     public void GenerateCube(Vector3Int position)
@@ -283,6 +236,46 @@ public class Chunk
                 vertexIndex += 4;
             }
         }
+    }
+
+    private void OnMeshDataReceived(ChunkMeshData meshData)
+    {
+        Mesh mesh = new Mesh();
+        mesh.vertices = meshData.vertices;
+        mesh.normals = meshData.normals;
+        mesh.triangles = meshData.triangles;
+        mesh.uv = meshData.uvs;
+
+        meshFilter.mesh = mesh;
+
+        if (meshCollider != null)
+            meshCollider.sharedMesh = mesh;
+    }
+
+    public byte[,,] BuildHaloBlockArray()
+    {
+        int SX = CHUNK_SIZE, SY = CHUNK_HEIGHT, SZ = CHUNK_SIZE;
+
+        // Niemals transform.position verwenden – nutze die integer Chunk-Koordinate!
+        // Beispiel: this.coordinate ist ein Vector3Int in Chunk-Rasterkoords.
+        int originX = this.coordinate.x * SX;
+        int originY = this.coordinate.y * SY;   // falls vertikale Chunks; sonst 0
+        int originZ = this.coordinate.z * SZ;
+
+        var halo = new byte[SX + 2, SY + 2, SZ + 2];
+
+        for (int x = -1; x <= SX; x++)
+            for (int y = -1; y <= SY; y++)
+                for (int z = -1; z <= SZ; z++)
+                {
+                    // Welt-Blockkoords (rein ganzzahlig)
+                    var wx = originX + x;
+                    var wy = originY + y;
+                    var wz = originZ + z;
+                    byte id = (byte)GetBlockAtPosition(new Vector3(wx, wy, wz));  // MAIN THREAD!
+                    halo[x + 1, y + 1, z + 1] = id;
+                }
+        return halo;
     }
 
     private void AddTexture(int textureId)
@@ -344,7 +337,12 @@ public class Chunk
         return blocks[x, y, z];
     }
 
-    public static Vector3[] cubeVertices = new Vector3[8] {
+    public void SetActive(bool enabled)
+    {
+        gameObject.SetActive(enabled);
+    }
+
+    public static readonly Vector3[] cubeVertices = new Vector3[8] {
         new Vector3(0.0f, 0.0f, 0.0f),
         new Vector3(1.0f, 0.0f, 0.0f),
         new Vector3(1.0f, 1.0f, 0.0f),
@@ -355,16 +353,16 @@ public class Chunk
         new Vector3(0.0f, 1.0f, 1.0f),
     };
 
-    public static Vector3[] cubeNormals = new Vector3[6] {
-        new Vector3(0.0f, 0.0f, -1.0f),
-        new Vector3(0.0f, 0.0f, 1.0f),
-        new Vector3(0.0f, 1.0f, 0.0f),
-        new Vector3(0.0f, -1.0f, 0.0f),
-        new Vector3(-1.0f, 0.0f, 0.0f),
-        new Vector3(1.0f, 0.0f, 0.0f)
+    public static readonly Vector3Int[] cubeNormals = new Vector3Int[6] {
+        new Vector3Int(0, 0, -1),
+        new Vector3Int(0, 0, 1),
+        new Vector3Int(0, 1, 0),
+        new Vector3Int(0, -1, 0),
+        new Vector3Int(-1, 0, 0),
+        new Vector3Int(1, 0, 0)
     };
 
-    public static int[,] cubeTriangles = new int[6, 4] {
+    public static readonly int[,] cubeTriangles = new int[6, 4] {
         // Back, Front, Top, Bottom, Left, Right
 
 		// 0 1 2 2 1 3
@@ -376,13 +374,12 @@ public class Chunk
 		{1, 2, 5, 6} // Right Face
 	};
 
-    public static Vector2[] cubeUVs = new Vector2[4] {
+    public static readonly Vector2[] cubeUVs = new Vector2[4] {
         new Vector2 (0.0f, 0.0f),
         new Vector2 (0.0f, 1.0f),
         new Vector2 (1.0f, 0.0f),
         new Vector2 (1.0f, 1.0f)
     };
-
 }
 
 public class MeshData

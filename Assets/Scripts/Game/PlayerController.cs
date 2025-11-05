@@ -1,8 +1,15 @@
 using UnityEngine;
 
+public enum MovementMode
+{
+    Default,
+    Flying
+}
+
 public class PlayerController : MonoBehaviour
 {
     [Header("Movement")]
+    public MovementMode movementMode = MovementMode.Default;
     [SerializeField] private float walkSpeed = 5f;
     [SerializeField] private float runSpeed = 8f;
     [SerializeField] private float crouchSpeed = 2.5f;
@@ -13,19 +20,26 @@ public class PlayerController : MonoBehaviour
     [SerializeField] private float cameraLockMin = -60f;
     [SerializeField] private float cameraLockMax = 60f;
     [SerializeField] private Camera playerCamera;
+    [SerializeField] private Transform playerMeshTr;
 
-    private Rigidbody rb;
-
+    [Header("Flying Mode")]
     [SerializeField] private float doubleSpaceThreshold = 0.2f;
     [SerializeField] private float maxFlySpeedMultiplier = 10f;
     [SerializeField] private float flySpeed = 10f;
     [SerializeField] private float flyAcceleration = 5f;
 
-    private bool isFlying = false;
-    private float flySpeedMultiplier = 1;
+    [Header("Physics")]
+    [SerializeField] private float maxVelocityY = 50f;
+    [SerializeField] private float minVelocityY = -50f;
+
+    private float curFlySpeedMultiplier = 1;
+    private bool isFlying => movementMode == MovementMode.Flying;
+    private bool isSpectator => isFlying && !boxCollider.enabled;
+
+    private Rigidbody rb;
+    private BoxCollider boxCollider;
 
     private float inputSpace = 0;
-
     public static PlayerController instance;
 
     private void Awake()
@@ -36,6 +50,7 @@ public class PlayerController : MonoBehaviour
             playerCamera = GetComponentInChildren<Camera>();
 
         rb = GetComponent<Rigidbody>();
+        boxCollider = GetComponentInChildren<BoxCollider>();
         Cursor.lockState = CursorLockMode.Locked;
         Cursor.visible = false;
     }
@@ -45,19 +60,20 @@ public class PlayerController : MonoBehaviour
         inputSpace += Time.deltaTime;
 
         Vector3 input = GetInput();
-        rb.linearVelocity = new Vector3(input.x, isFlying ? input.y : rb.linearVelocity.y, input.z);
+        float velocityY = Mathf.Clamp(isFlying ? input.y : rb.linearVelocity.y, minVelocityY, maxVelocityY);
+        rb.linearVelocity = new Vector3(input.x, velocityY, input.z);
 
-        Vector3 eulerAnglesY = transform.eulerAngles;
+        Vector3 eulerAnglesY = playerMeshTr.eulerAngles;
         Vector3 eulerAnglesX = playerCamera.transform.eulerAngles;
 
         eulerAnglesY.y += Input.GetAxis("Mouse X") * cameraSensitivity;
         eulerAnglesX.x -= Input.GetAxis("Mouse Y") * cameraSensitivity;
 
-        transform.rotation = Quaternion.Euler(eulerAnglesY);
+        playerMeshTr.rotation = Quaternion.Euler(eulerAnglesY);
         playerCamera.transform.rotation = Quaternion.Euler
             (
             Mathf.Clamp(eulerAnglesX.x > 180 ? eulerAnglesX.x - 360 : eulerAnglesX.x, cameraLockMin, cameraLockMax),
-            transform.eulerAngles.y,
+            playerMeshTr.eulerAngles.y,
             eulerAnglesX.z
             );
 
@@ -68,20 +84,9 @@ public class PlayerController : MonoBehaviour
 
         if (Input.GetKeyDown(KeyCode.Space))
         {
-            if (inputSpace < doubleSpaceThreshold)
+            if (!isSpectator && inputSpace < doubleSpaceThreshold)
             {
-                isFlying = !isFlying;
-
-                if (isFlying)
-                {
-                    rb.linearVelocity = new Vector3(0, 0, 0);
-                    rb.useGravity = false;
-                }
-                else
-                {
-                    rb.linearVelocity = new Vector3(rb.linearVelocity.x, 0, rb.linearVelocity.z);
-                    rb.useGravity = true;
-                }
+                SetFlyingMode();
             }
             else
             {
@@ -100,6 +105,33 @@ public class PlayerController : MonoBehaviour
             Cursor.lockState = CursorLockMode.Locked;
             Cursor.visible = false;
         }
+
+        if (Input.GetKeyDown(KeyCode.F1))
+        {
+            SetSpectatorMode();
+        }
+    }
+    public void SetFlyingMode()
+    {
+        movementMode = movementMode == MovementMode.Default ? MovementMode.Flying : MovementMode.Default;
+
+        if (isFlying)
+        {
+            rb.linearVelocity = new Vector3(0, 0, 0);
+            curFlySpeedMultiplier = 1;
+            rb.useGravity = false;
+        }
+        else
+        {
+            rb.linearVelocity = new Vector3(rb.linearVelocity.x, 0, rb.linearVelocity.z);
+            rb.useGravity = true;
+        }
+    }
+
+    public void SetSpectatorMode()
+    {
+        if (!isFlying || isSpectator) SetFlyingMode();
+        boxCollider.enabled = !isFlying;
     }
 
     public void Jump()
@@ -109,7 +141,7 @@ public class PlayerController : MonoBehaviour
 
     public bool IsGrounded()
     {
-        return Physics.OverlapCapsule(transform.position, transform.position + new Vector3(0, -0.6f, 0), 0.4f).Length > 1;
+        return Physics.CheckBox(transform.position + new Vector3(0, -0.1f, 0), transform.localScale / 2.1f, Quaternion.identity, ~LayerMask.GetMask("Player"));
     }
 
     public Vector3 GetInput()
@@ -117,23 +149,23 @@ public class PlayerController : MonoBehaviour
         bool isRunning = Input.GetKey(KeyCode.LeftShift);
         bool isCrouching = Input.GetKey(KeyCode.LeftControl);
 
-        Vector3 input = (Input.GetAxis("Vertical") * transform.forward + Input.GetAxis("Horizontal") * transform.right).normalized;
+        Vector3 input = (Input.GetAxis("Vertical") * playerMeshTr.forward + Input.GetAxis("Horizontal") * playerMeshTr.right).normalized;
 
         float speed = 0;
 
         if (isFlying)
         {
             if (Input.GetKey(KeyCode.Space))
-                input.y +=1;
+                input.y += 1;
             if (Input.GetKey(KeyCode.LeftControl))
                 input.y -= 1;
 
-            if(Input.GetKey(KeyCode.LeftShift))
-            flySpeedMultiplier = Mathf.Lerp(flySpeedMultiplier, maxFlySpeedMultiplier, Time.deltaTime * flyAcceleration);
-            else
-                flySpeedMultiplier = Mathf.Lerp(flySpeedMultiplier, 1, Time.deltaTime * flyAcceleration);
+            if (Input.GetKey(KeyCode.LeftShift))
+                curFlySpeedMultiplier = Mathf.Lerp(curFlySpeedMultiplier, maxFlySpeedMultiplier, Time.deltaTime * flyAcceleration);
+            else if(input == Vector3.zero)
+                curFlySpeedMultiplier = Mathf.Lerp(curFlySpeedMultiplier, 1, Time.deltaTime * flyAcceleration);
 
-            speed = flySpeed * flySpeedMultiplier;
+            speed = flySpeed * curFlySpeedMultiplier;
         }
         else
         {

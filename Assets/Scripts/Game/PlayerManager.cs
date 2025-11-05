@@ -5,10 +5,9 @@ using UnityEngine;
 
 public class PlayerManager : MonoBehaviour
 {
+    private static readonly Vector3 HalfExtents = new Vector3(0.499f, 0.499f, 0.499f);
 
     [SerializeField] private float maxInteractionDistance = 5;
-    [SerializeField] private float minDistanceToHead = 0.8f;
-    [SerializeField] private float minDistanceToFeet = 0.8f;
 
     public WorldGenerator world;
 
@@ -33,13 +32,10 @@ public class PlayerManager : MonoBehaviour
 
             if(Input.GetMouseButtonDown(1))
             {
-                bool isSamePositionAsPlayer = placeBlockPosition.x == Mathf.FloorToInt(transform.position.x) &&
-                    placeBlockPosition.z == Mathf.FloorToInt(transform.position.z);
+                Vector3 center = placeBlockPosition + new Vector3(0.5f, 0.5f, 0.5f);
+                bool overlapsWithPlayer = Physics.CheckBox(center, HalfExtents, Quaternion.identity, LayerMask.GetMask("Player"));
 
-
-                bool overlapsWithPlayer = false;
-
-                if (!isSamePositionAsPlayer || !overlapsWithPlayer)
+                if (!overlapsWithPlayer)
                 {
                     world.SetBlock(placeBlockPosition, selectedBlock.id);
                 }
@@ -77,12 +73,10 @@ public class PlayerManager : MonoBehaviour
                 highlightBlock.SetActive(true);
 
                 placeBlockPosition = lastPosition;
-
                 break;
             }
 
             lastPosition = highlightPosition;
-
             distance += 0.1f;
         }
     }
