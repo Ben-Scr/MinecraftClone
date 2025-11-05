@@ -6,29 +6,12 @@ using UnityEngine;
 
 public static class Noise
 {
-    public static void GenerateGroundLevelMap(ref byte[,] groundLevelMap, Vector3 position, float noiseHeight, float noiseScale, Vector2 noiseOffset, int groundOffset)
-    {
-        groundLevelMap = new byte[Chunk.CHUNK_SIZE, Chunk.CHUNK_SIZE];
-
-        for (int x = 0; x < Chunk.CHUNK_SIZE; x++)
-        {
-            for (int z = 0; z < Chunk.CHUNK_SIZE; z++)
-            {
-                int groundLevel = Mathf.FloorToInt
-                    (PerlinNoise2D.Perlin2D((position.x + x + noiseOffset.x) / noiseScale, (position.z + z + noiseOffset.y) / noiseScale)
-                    * noiseHeight) + groundOffset;
-
-                groundLevelMap[x, z] = (byte)groundLevel;
-            }
-        }
-    }
-
-    public static byte[] GenerateMap(Vector3 position, float noiseHeight, float noiseScale, Vector2 noiseOffset, int groundOffset)
+    public static byte[] GenerateBlocksParallel(Vector3 position, float noiseHeight, float noiseScale, Vector2 noiseOffset, int groundOffset)
     {
         const int LENGTH = Chunk.CHUNK_SIZE * Chunk.CHUNK_SIZE * Chunk.CHUNK_HEIGHT;
         var map = new NativeArray<byte>(LENGTH, Allocator.TempJob);
 
-        GenerateMapJob job = new GenerateMapJob
+        GenerateBlocksJob job = new GenerateBlocksJob
         {
             Map = map,
             position = position,
@@ -47,7 +30,7 @@ public static class Noise
 
 
     [BurstCompile]
-    public struct GenerateMapJob : IJobParallelFor
+    public struct GenerateBlocksJob : IJobParallelFor
     {
         [WriteOnly] public NativeArray<byte> Map;
 
@@ -65,6 +48,7 @@ public static class Noise
             int x = t / Chunk.CHUNK_SIZE;
 
             short groundLevel = (short)(Mathf.FloorToInt(PerlinNoise2D.Perlin2D((position.x + x + noiseOffset.x) / noiseScale, (position.z + z + noiseOffset.y) / noiseScale) * noiseHeight) + groundOffset);
+            y += (int)position.y;
 
             if (y > groundLevel)
             {

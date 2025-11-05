@@ -13,6 +13,7 @@ public class WorldGenerator : MonoBehaviour
     public readonly ConcurrentQueue<MapThreadInfo<ChunkMeshData>> meshDataThreadInfoQueue = new ConcurrentQueue<MapThreadInfo<ChunkMeshData>>();
 
     public Material blockMaterial;
+    [SerializeField] private int textureResolution = 16;
     public Block[] blockTypes;
 
     public GameObject chunkPrefab;
@@ -20,6 +21,7 @@ public class WorldGenerator : MonoBehaviour
     public bool addColliders = false;
     public bool addTrees = true;
     [SerializeField] private int viewDistance = 5;
+    [SerializeField] private int viewDistanceY = 2;
     public float noiseScale = 20.0f;
     public float noiseHeight = 10.0f;
     public int groundOffset = 10;
@@ -44,19 +46,24 @@ public class WorldGenerator : MonoBehaviour
     private Vector3Int[] poses;
     private float chunkUpdateThresholdSq;
     private int viewDistanceSq;
+    private int viewDistanceVerticalSq;
 
     private int lastViewDistance;
 
     private void Awake()
     {
-        int resolution = 16;
+        int resolution = textureResolution;
 
-        Chunk.TEXTURE_BLOCKS_COLS = (int)(1f / blockMaterial.mainTexture.texelSize.x / resolution) + 1;
-        Chunk.TEXTURE_BLOCKS_ROWS = (int)(1f / blockMaterial.mainTexture.texelSize.y / resolution) + 1;
+        Texture mainTex = blockMaterial.mainTexture;
+        Chunk.TEXTURE_BLOCKS_COLS = (int)(1f / mainTex.texelSize.x / resolution) + 1;
+        Chunk.TEXTURE_BLOCKS_ROWS = (int)(1f / mainTex.texelSize.y / resolution) + 1;
         Chunk.BLOCK_W = 1f / Chunk.TEXTURE_BLOCKS_COLS;
         Chunk.BLOCK_H = 1f / Chunk.TEXTURE_BLOCKS_ROWS;
-        Chunk.TEXTURE_WIDTH = blockMaterial.mainTexture.width;
-        Chunk.TEXTURE_HEIGHT = blockMaterial.mainTexture.height;
+        Chunk.TEXTURE_WIDTH = mainTex.width;
+        Chunk.TEXTURE_HEIGHT = mainTex.height;
+
+        Debug.Log(mainTex.width + " " + mainTex.height);
+        Debug.Log("Blocks in texture: " + Chunk.TEXTURE_BLOCKS_COLS + " x " + Chunk.TEXTURE_BLOCKS_ROWS);
 
         chunkUpdateThresholdSq = chunkUpdateThreshold * chunkUpdateThreshold;
         instance = this;
@@ -73,6 +80,7 @@ public class WorldGenerator : MonoBehaviour
     public void UpdateViewDistance()
     {
         viewDistanceSq = viewDistance * viewDistance;
+        viewDistanceVerticalSq = viewDistanceY * viewDistanceY;
 
         foreach (Vector3Int chunkCoord in lastActiveChunks)
         {
@@ -91,23 +99,28 @@ public class WorldGenerator : MonoBehaviour
     }
     private void GeneratePoses()
     {
-        var tmp = new List<Vector3Int>(viewDistance * viewDistance * 4);
+        int rx = viewDistance;
+        int ry = viewDistanceY > 0 ? viewDistanceY : viewDistance;
+        int rz = viewDistance;
 
-        for (int x = -viewDistance + 1; x < viewDistance; x++)
-        {
-            for (int z = -viewDistance + 1; z < viewDistance; z++)
-            {
-                int d2 = x * x + z * z;
-                if (d2 < viewDistanceSq)
-                    tmp.Add(new Vector3Int(x, 0, z));
-            }
-        }
+
+        int cap = (2 * rx + 1) * (2 * ry + 1) * (2 * rz + 1);
+        var tmp = new List<Vector3Int>(cap);
+
+        for (int x = -rx; x <= rx; x++)
+            for (int y = -ry; y <= ry; y++)
+                for (int z = -rz; z <= rz; z++)
+                    tmp.Add(new Vector3Int(x, y, z));
 
         tmp.Sort((a, b) =>
         {
-            int da = a.x * a.x + a.z * a.z;
-            int db = b.x * b.x + b.z * b.z;
-            return da.CompareTo(db);
+            int ca = Math.Max(Math.Max(Mathf.Abs(a.x), Mathf.Abs(a.y)), Mathf.Abs(a.z));
+            int cb = Math.Max(Math.Max(Mathf.Abs(b.x), Mathf.Abs(b.y)), Mathf.Abs(b.z));
+            if (ca != cb) return ca - cb;
+
+            int da = a.x * a.x + a.y * a.y + a.z * a.z;
+            int db = b.x * b.x + b.y * b.y + b.z * b.z;
+            return da - db;
         });
 
         poses = tmp.ToArray();
@@ -142,13 +155,14 @@ public class WorldGenerator : MonoBehaviour
         {
             var offset = poses[i];
             int cx = playerChunk.x + offset.x;
+            int cy = playerChunk.y + offset.y;
             int cz = playerChunk.z + offset.z;
 
 
-            if (offset.x * offset.x + offset.z * offset.z >= viewDistanceSq)
+            if (offset.x * offset.x + offset.z * offset.z >= viewDistanceSq || offset.y * offset.y >= viewDistanceY)
                 continue;
 
-            var key = new Vector3Int(cx, 0, cz);
+            var key = new Vector3Int(cx, cy, cz);
 
             if (!chunks.TryGetValue(key, out var chunk))
             {
@@ -163,6 +177,7 @@ public class WorldGenerator : MonoBehaviour
                 if (addColliders && chunk.meshCollider == null)
                 {
                     float distanceX = playerPosition.x - chunk.position.x;
+                    float distanceY = playerPosition.y - chunk.position.y;
                     float distanceZ = playerPosition.z - chunk.position.z;
 
                     float maxDistance = Chunk.CHUNK_SIZE + 5f;
@@ -178,7 +193,7 @@ public class WorldGenerator : MonoBehaviour
             var coordinate = chunksToCreate.Dequeue();
             queuedChunks.Remove(coordinate);
 
-            var targetChunk = new Chunk(coordinate.x, coordinate.z);
+            var targetChunk = new Chunk(coordinate.x, coordinate.y, coordinate.z);
             targetChunk.Prepare();
             chunks.Add(targetChunk.coordinate, targetChunk);
             chunksToGenerate.Enqueue(targetChunk.coordinate);
@@ -267,7 +282,7 @@ public class WorldGenerator : MonoBehaviour
 
                         for (int face = 0; face < 6; face++)
                         {
-                            int neighborBlock = GetHalo(haloBlocks,position + Chunk.cubeNormals[face]);
+                            int neighborBlock = GetHalo(haloBlocks, position + Chunk.cubeNormals[face]);
 
                             if (neighborBlock == Chunk.BLOCK_AIR || neighborBlock == Chunk.BLOCK_LEAVES)
                             {
@@ -329,21 +344,39 @@ public class WorldGenerator : MonoBehaviour
         uvs.Add(new Vector2(u1, v1)); // top-right
     }
 
-    public int GetBlockAtPosition(Vector3 position)
+    public int GetBlockAtPosition(Vector3 worldPos)
     {
-        Chunk chunk = GetChunkByPosition(position);
-
-        if (chunk != null)
-        {
-            return chunk.GetBlockAtPosition(position - chunk.position);
-        }
-
-        return Chunk.BLOCK_AIR;
+        var wx = Mathf.FloorToInt(worldPos.x);
+        var wy = Mathf.FloorToInt(worldPos.y);
+        var wz = Mathf.FloorToInt(worldPos.z);
+        return GetBlockAtBlock(new Vector3Int(wx, wy, wz));
     }
 
-    public Chunk GetChunkByCoordinate(int chunkX, int chunkZ)
+
+    public int GetBlockAtBlock(Vector3Int world)
     {
-        if (chunks.TryGetValue(new Vector3Int(chunkX, 0, chunkZ), out Chunk chunk))
+        var cx = Mathf.FloorToInt((float)world.x / Chunk.CHUNK_SIZE);
+        var cy = Mathf.FloorToInt((float)world.y / Chunk.CHUNK_HEIGHT);
+        var cz = Mathf.FloorToInt((float)world.z / Chunk.CHUNK_SIZE);
+        var cCoord = new Vector3Int(cx, cy, cz);
+
+        if (!chunks.TryGetValue(cCoord, out var chunk))
+            return Chunk.BLOCK_AIR;
+
+        var lx = world.x - cx * Chunk.CHUNK_SIZE;
+        var ly = world.y - cy * Chunk.CHUNK_HEIGHT;
+        var lz = world.z - cz * Chunk.CHUNK_SIZE;
+
+
+        if ((uint)lx >= Chunk.CHUNK_SIZE || (uint)ly >= Chunk.CHUNK_HEIGHT || (uint)lz >= Chunk.CHUNK_SIZE)
+            return Chunk.BLOCK_AIR;
+
+        return chunk.blocks[lx, ly, lz];
+    }
+
+    public Chunk GetChunkByCoordinate(int chunkX, int chunkY, int chunkZ)
+    {
+        if (chunks.TryGetValue(new Vector3Int(chunkX, chunkY, chunkZ), out Chunk chunk))
         {
             return chunk;
         }
@@ -354,9 +387,10 @@ public class WorldGenerator : MonoBehaviour
     Vector3Int GetChunkCoordinateFromPosition(Vector3 position)
     {
         int chunkX = Mathf.FloorToInt(position.x / Chunk.CHUNK_SIZE);
+        int chunkY = Mathf.FloorToInt(position.y / Chunk.CHUNK_HEIGHT);
         int chunkZ = Mathf.FloorToInt(position.z / Chunk.CHUNK_SIZE);
 
-        return new Vector3Int(chunkX, 0, chunkZ);
+        return new Vector3Int(chunkX, chunkY, chunkZ);
     }
 
     Chunk GetChunkByPosition(Vector3 position)
