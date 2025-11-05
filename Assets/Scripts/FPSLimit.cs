@@ -2,13 +2,16 @@ using System.Collections;
 using System.Collections.Generic;
 using UnityEngine;
 
-public class FPSLimit : MonoBehaviour
+namespace BenScr.MCC
 {
-    [SerializeField] private int targetFPS;
-
-    void Start()
+    public class FPSLimit : MonoBehaviour
     {
-        Application.targetFrameRate = targetFPS;
-    }
+        [SerializeField] private int targetFPS;
 
+        void Start()
+        {
+            Application.targetFrameRate = targetFPS;
+        }
+
+    }
 }

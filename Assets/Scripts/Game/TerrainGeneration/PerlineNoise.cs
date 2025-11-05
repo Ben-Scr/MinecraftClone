@@ -1,9 +1,11 @@
 ﻿using Unity.Mathematics;
 
-public static class PerlinNoise2D
+namespace BenScr.MCC
 {
-    private static readonly int[] Perm = new int[512]
+    public static class PerlinNoise2D
     {
+        private static readonly int[] Perm = new int[512]
+        {
         151,160,137,91,90,15,131,13,201,95,96,53,194,233,7,225,
         140,36,103,30,69,142,8,99,37,240,21,10,23,190, 6,148,
         247,120,234,75,0,26,197,62,94,252,219,203,117,35,11,32,
@@ -37,12 +39,12 @@ public static class PerlinNoise2D
         81,51,145,235,249,14,239,107,49,192,214, 31,181,199,106,157,
         184, 84,204,176,115,121,50,45,127, 4,150,254,138,236,205,93,
         222,114, 67,29,24,72,243,141,128,195,78,66,215,61,156,180
-    };
+        };
 
-    private struct Gradient2D { public float x, y; }
+        private struct Gradient2D { public float x, y; }
 
-    private static readonly Gradient2D[] Gradients = new Gradient2D[]
-    {
+        private static readonly Gradient2D[] Gradients = new Gradient2D[]
+        {
         new Gradient2D { x =  1, y =  1 },
         new Gradient2D { x = -1, y =  1 },
         new Gradient2D { x =  1, y = -1 },
@@ -51,37 +53,38 @@ public static class PerlinNoise2D
         new Gradient2D { x = -1, y =  0 },
         new Gradient2D { x =  0, y =  1 },
         new Gradient2D { x =  0, y = -1 },
-    };
+        };
 
-    private static float Fade(float t) => t * t * t * (t * (t * 6 - 15) + 10);
+        private static float Fade(float t) => t * t * t * (t * (t * 6 - 15) + 10);
 
-    private static float Lerp(float a, float b, float t) => a + t * (b - a);
+        private static float Lerp(float a, float b, float t) => a + t * (b - a);
 
-    private static float Grad(int hash, float x, float y)
-    {
-        Gradient2D g = Gradients[hash & 7];
-        return g.x * x + g.y * y;
-    }
+        private static float Grad(int hash, float x, float y)
+        {
+            Gradient2D g = Gradients[hash & 7];
+            return g.x * x + g.y * y;
+        }
 
-    public static float Perlin2D(float x, float y)
-    {
-        int X = (int)math.floor(x) & 255;
-        int Y = (int)math.floor(y) & 255;
+        public static float Perlin2D(float x, float y)
+        {
+            int X = (int)math.floor(x) & 255;
+            int Y = (int)math.floor(y) & 255;
 
-        float xf = x - math.floor(x);
-        float yf = y - math.floor(y);
+            float xf = x - math.floor(x);
+            float yf = y - math.floor(y);
 
-        float u = Fade(xf);
-        float v = Fade(yf);
+            float u = Fade(xf);
+            float v = Fade(yf);
 
-        int aa = Perm[X + Perm[Y]] & 0xFF;
-        int ab = Perm[X + Perm[Y + 1]] & 0xFF;
-        int ba = Perm[X + 1 + Perm[Y]] & 0xFF;
-        int bb = Perm[X + 1 + Perm[Y + 1]] & 0xFF;
+            int aa = Perm[X + Perm[Y]] & 0xFF;
+            int ab = Perm[X + Perm[Y + 1]] & 0xFF;
+            int ba = Perm[X + 1 + Perm[Y]] & 0xFF;
+            int bb = Perm[X + 1 + Perm[Y + 1]] & 0xFF;
 
-        float x1 = Lerp(Grad(aa, xf, yf), Grad(ba, xf - 1, yf), u);
-        float x2 = Lerp(Grad(ab, xf, yf - 1), Grad(bb, xf - 1, yf - 1), u);
+            float x1 = Lerp(Grad(aa, xf, yf), Grad(ba, xf - 1, yf), u);
+            float x2 = Lerp(Grad(ab, xf, yf - 1), Grad(bb, xf - 1, yf - 1), u);
 
-        return (Lerp(x1, x2, v) + 1f) * 0.5f;
+            return (Lerp(x1, x2, v) + 1f) * 0.5f;
+        }
     }
 }

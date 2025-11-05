@@ -1,11 +1,14 @@
 using TMPro;
 using UnityEngine;
 
-public class GameController : MonoBehaviour
+namespace BenScr.MCC
 {
-    [SerializeField] private TextMeshProUGUI fpsTxt;
-    private void Update()
+    public class GameController : MonoBehaviour
     {
-        fpsTxt.text = "FPS: " + (1f / Time.unscaledDeltaTime).ToString("0");
+        [SerializeField] private TextMeshProUGUI fpsTxt;
+        private void Update()
+        {
+            fpsTxt.text = "FPS: " + (1f / Time.unscaledDeltaTime).ToString("0");
+        }
     }
 }

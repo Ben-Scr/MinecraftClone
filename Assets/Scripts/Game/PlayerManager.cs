@@ -1,94 +1,94 @@
 using UnityEngine;
 
-public class PlayerManager : MonoBehaviour
+namespace BenScr.MCC
 {
-    private static readonly Vector3 HalfExtents = new Vector3(0.499f, 0.499f, 0.499f);
-
-    [SerializeField] private float maxInteractionDistance = 5;
-
-    public TerrainGenerator world;
-
-    public GameObject highlightBlock;
-
-    Vector3 highlightPosition;
-    Vector3 placeBlockPosition;
-
-    bool highlightBlockVisible = false;
-
-    [SerializeField] private float breakBlockCooldown = 0.1f;
-    [SerializeField] private float placeBlockCooldown = 0.1f;
-
-    private float breakBlockTimer = 0f;
-    private float placeBlockTimer = 0f;
-
-    public Block selectedBlock;
-
-    void Update()
+    public class PlayerManager : MonoBehaviour
     {
-        breakBlockTimer += Time.deltaTime;
-        placeBlockTimer += Time.deltaTime;
+        private static readonly Vector3 HalfExtents = new Vector3(0.499f, 0.499f, 0.499f);
 
-        if (highlightBlockVisible)
+        [SerializeField] private float maxInteractionDistance = 5;
+        [SerializeField] private GameObject highlightBlock;
+
+        Vector3 highlightPosition;
+        Vector3 placeBlockPosition;
+
+        bool highlightBlockVisible = false;
+
+        [SerializeField] private float breakBlockCooldown = 0.1f;
+        [SerializeField] private float placeBlockCooldown = 0.1f;
+
+        private float breakBlockTimer = 0f;
+        private float placeBlockTimer = 0f;
+
+        public Block selectedBlock;
+
+        void Update()
         {
-            if (Input.GetMouseButton(0) && breakBlockTimer > breakBlockCooldown)
-            {
-                breakBlockTimer = 0f;
-                world.SetBlock(highlightPosition, Chunk.BLOCK_AIR);
-            }
+            breakBlockTimer += Time.deltaTime;
+            placeBlockTimer += Time.deltaTime;
 
-            if (Input.GetMouseButton(1) && placeBlockTimer > placeBlockCooldown)
+            if (highlightBlockVisible)
             {
-                placeBlockTimer = 0f;
-                Vector3 center = placeBlockPosition + new Vector3(0.5f, 0.5f, 0.5f);
-                bool overlapsWithPlayer = Physics.CheckBox(center, HalfExtents, Quaternion.identity, LayerMask.GetMask("Player"));
-
-                if (!overlapsWithPlayer)
+                if (Input.GetMouseButton(0) && breakBlockTimer > breakBlockCooldown)
                 {
-                    world.SetBlock(placeBlockPosition, selectedBlock.id);
+                    breakBlockTimer = 0f;
+                    TerrainGenerator.instance.SetBlock(highlightPosition, Chunk.BLOCK_AIR);
+                }
+
+                if (Input.GetMouseButton(1) && placeBlockTimer > placeBlockCooldown)
+                {
+                    placeBlockTimer = 0f;
+                    Vector3 center = placeBlockPosition + new Vector3(0.5f, 0.5f, 0.5f);
+                    bool overlapsWithPlayer = Physics.CheckBox(center, HalfExtents, Quaternion.identity, LayerMask.GetMask("Player"));
+
+                    if (!overlapsWithPlayer)
+                    {
+                        TerrainGenerator.instance.SetBlock(placeBlockPosition, selectedBlock.id);
+                    }
                 }
             }
+
+            UpdateHighlightBlock();
         }
 
-        UpdateHighlightBlock();
-    }
-
-    private void UpdateHighlightBlock()
-    {
-        float distance = 0;
-
-        highlightBlockVisible = false;
-        highlightBlock.SetActive(false);
-
-        Vector3 lastPosition = Vector3.zero;
-
-        while (distance < maxInteractionDistance)
+        private void UpdateHighlightBlock()
         {
-            Vector3 position = Camera.main.transform.position +
-                Camera.main.transform.forward * distance;
+            float distance = 0;
 
-            highlightPosition = new Vector3(
-                   Mathf.FloorToInt(position.x),
-                   Mathf.FloorToInt(position.y),
-                   Mathf.FloorToInt(position.z)
-                   );
+            highlightBlockVisible = false;
+            highlightBlock.SetActive(false);
 
-            int blockID = world.GetBlockAtPosition(highlightPosition);
-            if (blockID != Chunk.BLOCK_AIR)
+            Vector3 lastPosition = Vector3.zero;
+
+            while (distance < maxInteractionDistance)
             {
-                if (Input.GetKeyDown(KeyCode.E))
-                    Debug.Log(AssetsContainer.GetBlock(blockID).name);
+                Vector3 position = Camera.main.transform.position +
+                    Camera.main.transform.forward * distance;
 
-                highlightBlock.transform.position = highlightPosition + new Vector3(0.5f, 0.5f, 0.5f);
+                highlightPosition = new Vector3(
+                       Mathf.FloorToInt(position.x),
+                       Mathf.FloorToInt(position.y),
+                       Mathf.FloorToInt(position.z)
+                       );
 
-                highlightBlockVisible = true;
-                highlightBlock.SetActive(true);
+                int blockID = ChunkUtility.GetBlockAtPosition(highlightPosition);
+                if (blockID != Chunk.BLOCK_AIR)
+                {
+                    if (Input.GetKeyDown(KeyCode.E))
+                        Debug.Log(AssetsContainer.GetBlock(blockID).name);
 
-                placeBlockPosition = lastPosition;
-                break;
+                    highlightBlock.transform.position = highlightPosition + new Vector3(0.5f, 0.5f, 0.5f);
+
+                    highlightBlockVisible = true;
+                    highlightBlock.SetActive(true);
+
+                    placeBlockPosition = lastPosition;
+                    break;
+                }
+
+                lastPosition = highlightPosition;
+                distance += 0.1f;
             }
-
-            lastPosition = highlightPosition;
-            distance += 0.1f;
         }
     }
 }
