@@ -1,9 +1,10 @@
+using System;
 using UnityEngine;
 
 [CreateAssetMenu(fileName = "Block", menuName = "Scriptable Objects/Block")]
 public class Block : ScriptableObject
 {
-    public int id;
+    internal ushort id;
     public int durability;
     public bool isTransparent;
 

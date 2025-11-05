@@ -1,21 +1,62 @@
 using System;
-using System.Collections;
 using System.Collections.Concurrent;
 using System.Collections.Generic;
-using System.ComponentModel;
-using System.Linq;
 using System.Threading;
+using Unity.Mathematics;
 using UnityEngine;
-using UnityEngine.UIElements;
-using static UnityEngine.Mesh;
+using static AssetsContainer;
 
-public class WorldGenerator : MonoBehaviour
+public class TerrainGenerator : MonoBehaviour
 {
-    public readonly ConcurrentQueue<MapThreadInfo<ChunkMeshData>> meshDataThreadInfoQueue = new ConcurrentQueue<MapThreadInfo<ChunkMeshData>>();
+    public readonly ConcurrentQueue<TerrainThreadInfo<ChunkMeshData>> meshDataThreadInfoQueue = new ConcurrentQueue<TerrainThreadInfo<ChunkMeshData>>();
 
-    public Material blockMaterial;
-    [SerializeField] private int textureResolution = 16;
-    public Block[] blockTypes;
+    [Serializable]
+    public struct NoiseLayerSettings
+    {
+        public float scale;
+        public float amplitude;
+        public float redistribution;
+        public Vector2 offset;
+    }
+
+    [Header("Terrain Noise Layers")]
+    public NoiseLayerSettings continentNoise = new NoiseLayerSettings
+    {
+        scale = 320f,
+        amplitude = 1f,
+        redistribution = 1.15f,
+        offset = Vector2.zero
+    };
+
+    public NoiseLayerSettings mountainNoise = new NoiseLayerSettings
+    {
+        scale = 120f,
+        amplitude = 1f,
+        redistribution = 1.05f,
+        offset = Vector2.zero
+    };
+
+    public NoiseLayerSettings detailNoise = new NoiseLayerSettings
+    {
+        scale = 40f,
+        amplitude = 0.5f,
+        redistribution = 1f,
+        offset = Vector2.zero
+    };
+
+    public NoiseLayerSettings ridgeNoise = new NoiseLayerSettings
+    {
+        scale = 60f,
+        amplitude = 0.8f,
+        redistribution = 2f,
+        offset = Vector2.zero
+    };
+
+    [Header("Terrain Noise Blending")]
+    [Range(0.1f, 3f)] public float flatlandsHeightMultiplier = 0.65f;
+    [Range(0.5f, 5f)] public float mountainHeightMultiplier = 2.5f;
+    [Range(0f, 1f)] public float mountainBlendStart = 0.55f;
+    [Range(0.1f, 4f)] public float mountainBlendSharpness = 2f;
 
     public GameObject chunkPrefab;
     [SerializeField] private int seed = 0;
@@ -43,7 +84,7 @@ public class WorldGenerator : MonoBehaviour
     [SerializeField] private int maxChunksCreatedPerFrame = 2;
     [SerializeField] private int maxChunksGeneratePerFrame = 2;
 
-    public static WorldGenerator instance;
+    public static TerrainGenerator instance;
     private Vector3Int[] poses;
     private float chunkUpdateThresholdSq;
     private int viewDistanceSq;
@@ -51,21 +92,13 @@ public class WorldGenerator : MonoBehaviour
 
     private int lastViewDistance;
 
+    Vector2 continentNoiseRuntimeOffset;
+    Vector2 mountainNoiseRuntimeOffset;
+    Vector2 detailNoiseRuntimeOffset;
+    Vector2 ridgeNoiseRuntimeOffset;
+
     private void Awake()
     {
-        int resolution = textureResolution;
-
-        Texture mainTex = blockMaterial.mainTexture;
-        Chunk.TEXTURE_BLOCKS_COLS = (int)(1f / mainTex.texelSize.x / resolution) + 1;
-        Chunk.TEXTURE_BLOCKS_ROWS = (int)(1f / mainTex.texelSize.y / resolution) + 1;
-        Chunk.BLOCK_W = 1f / Chunk.TEXTURE_BLOCKS_COLS;
-        Chunk.BLOCK_H = 1f / Chunk.TEXTURE_BLOCKS_ROWS;
-        Chunk.TEXTURE_WIDTH = mainTex.width;
-        Chunk.TEXTURE_HEIGHT = mainTex.height;
-
-        Debug.Log(mainTex.width + " " + mainTex.height);
-        Debug.Log("Blocks in texture: " + Chunk.TEXTURE_BLOCKS_COLS + " x " + Chunk.TEXTURE_BLOCKS_ROWS);
-
         chunkUpdateThresholdSq = chunkUpdateThreshold * chunkUpdateThreshold;
         instance = this;
         UpdateViewDistance();
@@ -74,7 +107,21 @@ public class WorldGenerator : MonoBehaviour
     void Start()
     {
         UnityEngine.Random.InitState(seed);
+
+        continentNoiseRuntimeOffset = GenerateRuntimeOffset();
+        mountainNoiseRuntimeOffset = GenerateRuntimeOffset();
+        detailNoiseRuntimeOffset = GenerateRuntimeOffset();
+        ridgeNoiseRuntimeOffset = GenerateRuntimeOffset();
+
         noiseOffset = new Vector2(UnityEngine.Random.Range(-100000f, 100000f), UnityEngine.Random.Range(-100000f, 100000f));
+    }
+
+    Vector2 GenerateRuntimeOffset()
+    {
+        return new Vector2(
+            UnityEngine.Random.Range(-100000f, 100000f),
+            UnityEngine.Random.Range(-100000f, 100000f)
+        );
     }
 
 
@@ -258,7 +305,7 @@ public class WorldGenerator : MonoBehaviour
     private void MeshDataThread(byte[,,] haloBlocks, Action<ChunkMeshData> callback)
     {
         ChunkMeshData meshData = GenerateMeshData(haloBlocks);
-        meshDataThreadInfoQueue.Enqueue(new MapThreadInfo<ChunkMeshData>(callback, meshData));
+        meshDataThreadInfoQueue.Enqueue(new TerrainThreadInfo<ChunkMeshData>(callback, meshData));
     }
 
 
@@ -278,7 +325,7 @@ public class WorldGenerator : MonoBehaviour
                 for (int z = 0; z < Chunk.CHUNK_SIZE; z++)
                 {
                     int blockId = haloBlocks[x + 1, y + 1, z + 1];
-                    Block block = blockTypes[blockId];
+                    Block block = GetBlock(blockId);
 
                     if (blockId != Chunk.BLOCK_AIR)
                     {
@@ -287,7 +334,7 @@ public class WorldGenerator : MonoBehaviour
                         for (int face = 0; face < 6; face++)
                         {
                             int neighborBlockId = GetHalo(haloBlocks, position + Chunk.cubeNormals[face]);
-                            Block neighbourBlock = blockTypes[neighborBlockId];
+                            Block neighbourBlock = GetBlock(neighborBlockId);
 
                             if (neighbourBlock.isTransparent)
                             {
@@ -321,6 +368,51 @@ public class WorldGenerator : MonoBehaviour
         return new ChunkMeshData(triangles, vertices, normals, uvs);
     }
 
+    public int GetTerrainHeight(int worldX, int worldZ)
+    {
+        float normalizedHeight = SampleTerrainHeight01(new float2(worldX, worldZ));
+        return Mathf.FloorToInt(normalizedHeight * noiseHeight) + groundOffset;
+    }
+
+    internal float SampleTerrainHeight01(float2 worldPosition)
+    {
+        GetNoiseLayers(out var continentLayer, out var mountainLayer, out var detailLayer, out var ridgeLayer);
+
+        return TerrainNoiseUtility.SampleNormalizedHeight(
+            worldPosition,
+            continentLayer,
+            mountainLayer,
+            detailLayer,
+            ridgeLayer,
+            flatlandsHeightMultiplier,
+            mountainHeightMultiplier,
+            mountainBlendStart,
+            mountainBlendSharpness);
+    }
+
+    internal void GetNoiseLayers(out NoiseLayer continentLayer, out NoiseLayer mountainLayer, out NoiseLayer detailLayer, out NoiseLayer ridgeLayer)
+    {
+        continentLayer = CreateNoiseLayer(continentNoise, continentNoiseRuntimeOffset);
+        mountainLayer = CreateNoiseLayer(mountainNoise, mountainNoiseRuntimeOffset);
+        detailLayer = CreateNoiseLayer(detailNoise, detailNoiseRuntimeOffset);
+        ridgeLayer = CreateNoiseLayer(ridgeNoise, ridgeNoiseRuntimeOffset);
+    }
+
+    NoiseLayer CreateNoiseLayer(NoiseLayerSettings settings, Vector2 runtimeOffset)
+    {
+        float scale = settings.scale > 0f ? settings.scale : Mathf.Max(0.0001f, noiseScale);
+
+        return new NoiseLayer
+        {
+            frequency = 1f / Mathf.Max(0.0001f, scale),
+            amplitude = Mathf.Max(0f, settings.amplitude),
+            redistribution = Mathf.Max(0.0001f, settings.redistribution),
+            offset = new float2(
+                settings.offset.x + runtimeOffset.x + noiseOffset.x,
+                settings.offset.y + runtimeOffset.y + noiseOffset.y)
+        };
+    }
+
     private static byte GetHalo(byte[,,] haloBlocks, Vector3Int pos)
     {
         return haloBlocks[pos.x + 1, pos.y + 1, pos.z + 1];
@@ -328,20 +420,20 @@ public class WorldGenerator : MonoBehaviour
 
     private void AddTexture(int textureId, ref List<Vector2> uvs)
     {
-        int col = textureId % Chunk.TEXTURE_BLOCKS_COLS;
-        int rowFromTop = Chunk.TEXTURE_BLOCKS_ROWS - 1 - (textureId / Chunk.TEXTURE_BLOCKS_COLS);
+        int col = textureId % TEXTURE_BLOCKS_COLS;
+        int rowFromTop = TEXTURE_BLOCKS_ROWS - 1 - (textureId / TEXTURE_BLOCKS_COLS);
 
-        float u = col * Chunk.BLOCK_W;
-        float v = rowFromTop * Chunk.BLOCK_H;
+        float u = col * BLOCK_W;
+        float v = rowFromTop * BLOCK_H;
 
 
-        float epsU = 0.5f / Chunk.TEXTURE_WIDTH;
-        float epsV = 0.5f / Chunk.TEXTURE_HEIGHT;
+        float epsU = 0.5f / TEXTURE_WIDTH;
+        float epsV = 0.5f / TEXTURE_HEIGHT;
 
         float u0 = u + epsU;
         float v0 = v + epsV;
-        float u1 = u + Chunk.BLOCK_W - epsU;
-        float v1 = v + Chunk.BLOCK_H - epsV;
+        float u1 = u + BLOCK_W - epsU;
+        float v1 = v + BLOCK_H - epsV;
 
         uvs.Add(new Vector2(u0, v0)); // bottom-left
         uvs.Add(new Vector2(u0, v1)); // top-left
@@ -426,12 +518,12 @@ public class WorldGenerator : MonoBehaviour
 }
 
 
-public struct MapThreadInfo<T>
+public struct TerrainThreadInfo<T>
 {
     public readonly Action<T> calback;
     public readonly T parameter;
 
-    public MapThreadInfo(Action<T> callback, T parameter)
+    public TerrainThreadInfo(Action<T> callback, T parameter)
     {
         this.calback = callback;
         this.parameter = parameter;

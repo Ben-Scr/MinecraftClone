@@ -1,6 +1,3 @@
-using System;
-using System.Collections;
-using System.Collections.Generic;
 using UnityEngine;
 
 public class PlayerManager : MonoBehaviour
@@ -9,7 +6,7 @@ public class PlayerManager : MonoBehaviour
 
     [SerializeField] private float maxInteractionDistance = 5;
 
-    public WorldGenerator world;
+    public TerrainGenerator world;
 
     public GameObject highlightBlock;
 
@@ -79,7 +76,7 @@ public class PlayerManager : MonoBehaviour
             if (blockID != Chunk.BLOCK_AIR)
             {
                 if (Input.GetKeyDown(KeyCode.E))
-                    Debug.Log(WorldGenerator.instance.blockTypes[blockID].name);
+                    Debug.Log(AssetsContainer.GetBlock(blockID).name);
 
                 highlightBlock.transform.position = highlightPosition + new Vector3(0.5f, 0.5f, 0.5f);
 

@@ -143,7 +143,7 @@ public class PlayerController : MonoBehaviour
     {
         if (!isFlying || isSpectator) SetFlyingMode();
         boxCollider.enabled = !isFlying;
-        rb.constraints = isFlying ? RigidbodyConstraints.FreezeAll : RigidbodyConstraints.None;
+        rb.constraints = isFlying ? RigidbodyConstraints.FreezeAll : RigidbodyConstraints.FreezeRotation;
     }
 
     public void Jump()
