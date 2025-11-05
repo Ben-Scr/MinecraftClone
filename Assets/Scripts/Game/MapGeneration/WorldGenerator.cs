@@ -260,7 +260,7 @@ public class WorldGenerator : MonoBehaviour
         ChunkMeshData meshData = GenerateMeshData(haloBlocks);
         meshDataThreadInfoQueue.Enqueue(new MapThreadInfo<ChunkMeshData>(callback, meshData));
     }
- 
+
 
     public ChunkMeshData GenerateMeshData(byte[,,] haloBlocks)
     {
@@ -286,9 +286,10 @@ public class WorldGenerator : MonoBehaviour
 
                         for (int face = 0; face < 6; face++)
                         {
-                            int neighborBlock = GetHalo(haloBlocks, position + Chunk.cubeNormals[face]);
+                            int neighborBlockId = GetHalo(haloBlocks, position + Chunk.cubeNormals[face]);
+                            Block neighbourBlock = blockTypes[neighborBlockId];
 
-                            if (neighborBlock == Chunk.BLOCK_AIR /*|| neighborBlock == Chunk.BLOCK_LEAVES*/)
+                            if (neighbourBlock.isTransparent)
                             {
                                 vertices.Add(position + Chunk.cubeVertices[Chunk.cubeTriangles[face, 0]]);
                                 vertices.Add(position + Chunk.cubeVertices[Chunk.cubeTriangles[face, 1]]);
