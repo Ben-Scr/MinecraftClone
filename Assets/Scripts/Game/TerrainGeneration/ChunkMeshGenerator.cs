@@ -169,7 +169,7 @@ namespace BenScr.MCC
             return new ChunkMeshData(triangles, vertices, normals, uvs);
         }
 
-        private static void AddTexture(int textureId, FaceDefinition face, ref List<Vector2> uvs)
+        private static void AddTexture(int textureId, FaceDefinition face, int uLength, int vLength, ref List<Vector2> uvs)
         {
             int col = textureId % TEXTURE_BLOCKS_COLS;
             int rowFromTop = TEXTURE_BLOCKS_ROWS - 1 - (textureId / TEXTURE_BLOCKS_COLS);
@@ -191,10 +191,18 @@ namespace BenScr.MCC
             float vStart = face.VStep > 0 ? v0 : v1;
             float vEnd = face.VStep > 0 ? v1 : v0;
 
-            uvs.Add(new Vector2(uStart, vStart)); // bottom-left
-            uvs.Add(new Vector2(uEnd, vStart)); // bottom-right
-            uvs.Add(new Vector2(uStart, vEnd)); // top-left
-            uvs.Add(new Vector2(uEnd, vEnd)); // top-right
+            float uSpan = (uEnd - uStart) * uLength;
+            float vSpan = (vEnd - vStart) * vLength;
+
+            Vector2 uv0 = new Vector2(uStart, vStart);
+            Vector2 uv1 = new Vector2(uStart + uSpan, vStart);
+            Vector2 uv2 = new Vector2(uStart, vStart + vSpan);
+            Vector2 uv3 = new Vector2(uStart + uSpan, vStart + vSpan);
+
+            uvs.Add(uv0);
+            uvs.Add(uv1);
+            uvs.Add(uv2);
+            uvs.Add(uv3);
         }
 
         private static Vector3Int GetBlockCoords(FaceDefinition face, int axisPos, int uCoord, int vCoord)
@@ -315,7 +323,7 @@ namespace BenScr.MCC
             triangles.Add(vertexIndex + 1);
             triangles.Add(vertexIndex + 3);
 
-            AddTexture(textureId, face, ref uvs);
+            AddTexture(textureId, face, uLength, vLength, ref uvs);
 
             vertexIndex += 4;
         }
@@ -369,6 +377,7 @@ namespace BenScr.MCC
                 TextureId = textureId;
             }
         }
+
 
         public static readonly Vector3[] cubeVertices = new Vector3[8] {
         new Vector3(0.0f, 0.0f, 0.0f),
