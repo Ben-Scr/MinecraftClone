@@ -169,7 +169,7 @@ namespace BenScr.MCC
             return new ChunkMeshData(triangles, vertices, normals, uvs);
         }
 
-        private static void AddTexture(int textureId, int uLength, int vLength, ref List<Vector2> uvs)
+        private static void AddTexture(in FaceDefinition face, int textureId, int uLength, int vLength, ref List<Vector2> uvs)
         {
             int col = textureId % TEXTURE_BLOCKS_COLS;
             int rowFromTop = TEXTURE_BLOCKS_ROWS - 1 - (textureId / TEXTURE_BLOCKS_COLS);
@@ -186,13 +186,32 @@ namespace BenScr.MCC
             float u1 = u + BLOCK_W - epsU;
             float v1 = v + BLOCK_H - epsV;
 
-            float uSpan = (u1 - u0) * vLength;
-            float vSpan = (v1 - v0) * uLength;
+            float uSpan = (u1 - u0) * uLength;
+            float vSpan = (v1 - v0) * vLength;
 
-            Vector2 uv0 = new Vector2(u0, v0);
-            Vector2 uv1 = new Vector2(u0, v0 + vSpan);
-            Vector2 uv2 = new Vector2(u0 + uSpan, v0);
-            Vector2 uv3 = new Vector2(u0 + uSpan, v0 + vSpan);
+            float uMin = u0;
+            float uMax = u0 + uSpan;
+            float vMin = v0;
+            float vMax = v0 + vSpan;
+
+            if (face.UStep < 0)
+            {
+                float temp = uMin;
+                uMin = uMax;
+                uMax = temp;
+            }
+
+            if (face.VStep < 0)
+            {
+                float temp = vMin;
+                vMin = vMax;
+                vMax = temp;
+            }
+
+            Vector2 uv0 = new Vector2(uMin, vMin);
+            Vector2 uv1 = new Vector2(uMax, vMin);
+            Vector2 uv2 = new Vector2(uMin, vMax);
+            Vector2 uv3 = new Vector2(uMax, vMax);
 
             uvs.Add(uv0);
             uvs.Add(uv1);
@@ -318,7 +337,7 @@ namespace BenScr.MCC
             triangles.Add(vertexIndex + 1);
             triangles.Add(vertexIndex + 3);
 
-            AddTexture(textureId, uLength, vLength, ref uvs);
+            AddTexture(face,textureId, uLength, vLength, ref uvs);
 
             vertexIndex += 4;
         }
