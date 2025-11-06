@@ -432,6 +432,13 @@ namespace BenScr.MCC
             if (meshFilter == null) return;
 
             Mesh mesh = new Mesh();
+            mesh.indexFormat = meshData.vertices.Length > ushort.MaxValue ? UnityEngine.Rendering.IndexFormat.UInt32 : UnityEngine.Rendering.IndexFormat.UInt16;
+
+            if(mesh.indexFormat == UnityEngine.Rendering.IndexFormat.UInt32)
+            {
+                UnityEngine.Debug.LogWarning("Mesh index format set to UInt32 due to large vertex count.");
+            }
+
             mesh.vertices = meshData.vertices;
             mesh.normals = meshData.normals;
             mesh.triangles = meshData.triangles;
