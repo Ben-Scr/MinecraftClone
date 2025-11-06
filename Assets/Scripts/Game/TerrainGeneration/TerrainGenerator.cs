@@ -66,7 +66,7 @@ namespace BenScr.MCC
         public int groundOffset = 10;
         internal Vector2 noiseOffset;
         [SerializeField] private float chunkUpdateThreshold = 1.0f;
-        [SerializeField] private bool disableChunks = false;
+        [SerializeField] private bool shouldDisableChunks = false;
 
 
         public static readonly Dictionary<Vector3Int, Chunk> chunks = new();
@@ -78,14 +78,14 @@ namespace BenScr.MCC
         private readonly HashSet<Vector3Int> currentActiveChunks = new(512);
 
         private Vector3 lastChunkUpdatePlayerPosition;
-        [SerializeField] private int maxChunksCreatedPerFrame = 2;
+        [SerializeField] private int maxChunksCreatePerFrame = 2;
         [SerializeField] private int maxChunksGeneratePerFrame = 2;
 
         public static TerrainGenerator instance;
         private Vector3Int[] poses;
         private float chunkUpdateThresholdSq;
-        private int viewDistanceSq;
-        private int viewDistanceVerticalSq;
+        private int viewDistanceXZSq;
+        private int viewDistanceYSq;
 
 
         private int lastViewDistance;
@@ -126,16 +126,16 @@ namespace BenScr.MCC
 
         public void UpdateViewDistance()
         {
-            viewDistanceSq = viewDistance * viewDistance;
-            viewDistanceVerticalSq = viewDistanceY * viewDistanceY;
+            viewDistanceXZSq = viewDistance * viewDistance;
+            viewDistanceYSq = viewDistanceY * viewDistanceY;
 
             foreach (Vector3Int chunkCoord in lastActiveChunks)
             {
                 Vector3 playerPosition = PlayerController.instance.transform.position;
-                Vector3Int playerChunk = GetChunkCoordinateFromPosition(playerPosition);
+                Vector3Int playerChunk = ChunkUtility.GetChunkCoordinateFromPosition(playerPosition);
 
                 bool visible = (playerChunk.x - chunkCoord.x) * (playerChunk.x - chunkCoord.x)
-                                + (playerChunk.z - chunkCoord.z) * (playerChunk.z - chunkCoord.z) < viewDistanceSq;
+                                + (playerChunk.z - chunkCoord.z) * (playerChunk.z - chunkCoord.z) < viewDistanceXZSq;
 
                 if (chunks.TryGetValue(chunkCoord, out var ch))
                     ch.SetActive(visible);
@@ -185,37 +185,34 @@ namespace BenScr.MCC
 
         public void UpdateChunks(Vector3 playerPosition)
         {
-            bool movedEnough = (playerPosition - lastChunkUpdatePlayerPosition).sqrMagnitude >= chunkUpdateThresholdSq;
+           // bool movedEnough = (playerPosition - lastChunkUpdatePlayerPosition).sqrMagnitude >= chunkUpdateThresholdSq;
+           bool movedEnough = true;
+
             if (!movedEnough && chunksToCreate.Count == 0 && chunksToGenerate.Count == 0)
                 return;
 
-            Vector3Int playerChunk = GetChunkCoordinateFromPosition(playerPosition);
-
+            Vector3Int playerChunk = ChunkUtility.GetChunkCoordinateFromPosition(playerPosition);
 
             currentActiveChunks.Clear();
 
             for (int i = 0; i < poses.Length; i++)
             {
-                var offset = poses[i];
-                int cx = playerChunk.x + offset.x;
-                int cy = playerChunk.y + offset.y;
-                int cz = playerChunk.z + offset.z;
+                Vector3Int pos = poses[i];
 
+                //if (pos.x * pos.x + pos.z * pos.z >= viewDistanceXZSq || pos.y * pos.y >= viewDistanceYSq)
+                //    continue;
 
-                if (offset.x * offset.x + offset.z * offset.z >= viewDistanceSq || offset.y * offset.y >= viewDistanceY)
-                    continue;
+                var coordinate = new Vector3Int(playerChunk.x + pos.x, playerChunk.y + pos.y, playerChunk.z + pos.z);
 
-                var key = new Vector3Int(cx, cy, cz);
-
-                if (!chunks.TryGetValue(key, out var chunk))
+                if (!chunks.TryGetValue(coordinate, out var chunk))
                 {
-                    if (queuedChunks.Add(key))
-                        chunksToCreate.Enqueue(key);
+                    if (queuedChunks.Add(coordinate))
+                        chunksToCreate.Enqueue(coordinate);
                 }
                 else
                 {
                     if (movedEnough)
-                        currentActiveChunks.Add(key);
+                        currentActiveChunks.Add(coordinate);
 
                     if (addColliders && chunk.meshCollider == null)
                     {
@@ -230,7 +227,7 @@ namespace BenScr.MCC
                 }
             }
 
-            int createChunksCount = Math.Min(chunksToCreate.Count, maxChunksCreatedPerFrame);
+            int createChunksCount = math.min(chunksToCreate.Count, maxChunksCreatePerFrame);
             for (int i = 0; i < createChunksCount; i++)
             {
                 var coordinate = chunksToCreate.Dequeue();
@@ -239,12 +236,13 @@ namespace BenScr.MCC
                 var targetChunk = new Chunk(coordinate.x, coordinate.y, coordinate.z);
                 targetChunk.Prepare();
                 chunks.Add(targetChunk.coordinate, targetChunk);
+                if(!targetChunk.isGenerated)
                 chunksToGenerate.Enqueue(targetChunk.coordinate);
 
                 if (movedEnough) currentActiveChunks.Add(targetChunk.coordinate);
             }
 
-            int generateChunksCount = Math.Min(chunksToGenerate.Count, maxChunksGeneratePerFrame);
+            int generateChunksCount = math.min(chunksToGenerate.Count, maxChunksGeneratePerFrame);
             for (int i = 0; i < generateChunksCount; i++)
             {
                 var coordinate = chunksToGenerate.Dequeue();
@@ -260,15 +258,19 @@ namespace BenScr.MCC
                 if (movedEnough) currentActiveChunks.Add(targetChunk.coordinate);
             }
 
-            if (movedEnough && disableChunks)
+            if (movedEnough && shouldDisableChunks)
             {
-                foreach (var prev in lastActiveChunks)
+                foreach (var position in lastActiveChunks)
                 {
-                    bool visible = (playerChunk.x - prev.x) * (playerChunk.x - prev.x)
-                                   + (playerChunk.z - prev.z) * (playerChunk.z - prev.z) < viewDistanceSq;
+                    float distanceX = playerChunk.x - position.x;
+                    float distanceZ = playerChunk.z - position.z;
+                    float distanceY = playerChunk.y - position.y;
 
-                    if (chunks.TryGetValue(prev, out var ch))
-                        ch.SetActive(visible);
+                    bool visibleXZ = distanceX * distanceX + distanceZ * distanceZ <= viewDistanceXZSq;
+                    bool visibleY = distanceY * distanceY <= viewDistanceYSq;
+
+                    if (chunks.TryGetValue(position, out var chunk))
+                        chunk.SetActive(visibleXZ && visibleY);
                 }
 
                 lastActiveChunks.Clear();
@@ -335,30 +337,10 @@ namespace BenScr.MCC
             };
         }
 
-        Vector3Int GetChunkCoordinateFromPosition(Vector3 position)
-        {
-            int chunkX = Mathf.FloorToInt(position.x / Chunk.CHUNK_SIZE);
-            int chunkY = Mathf.FloorToInt(position.y / Chunk.CHUNK_HEIGHT);
-            int chunkZ = Mathf.FloorToInt(position.z / Chunk.CHUNK_SIZE);
-
-            return new Vector3Int(chunkX, chunkY, chunkZ);
-        }
-
-        Chunk GetChunkByPosition(Vector3 position)
-        {
-            Vector3Int coordinate = GetChunkCoordinateFromPosition(position);
-
-            if (chunks.TryGetValue(new Vector3Int(coordinate.x, coordinate.y, coordinate.z), out Chunk chunk))
-            {
-                return chunk;
-            }
-
-            return null;
-        }
 
         public void SetBlock(Vector3 position, int id)
         {
-            Chunk chunk = GetChunkByPosition(position);
+            Chunk chunk = ChunkUtility.GetChunkByPosition(position);
 
             if (chunk != null)
             {

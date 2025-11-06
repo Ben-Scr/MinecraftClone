@@ -4,10 +4,11 @@ using System.Collections.Generic;
 using System.Threading;
 using Unity.Collections;
 using UnityEngine;
-using static AssetsContainer;
 
 namespace BenScr.MCC
 {
+    using static AssetsContainer;
+
     public class ChunkMeshGenerator
     {
         public static readonly ConcurrentQueue<ThreadInfo<ChunkMeshData>> meshDataThreadInfoQueue = new ConcurrentQueue<ThreadInfo<ChunkMeshData>>();

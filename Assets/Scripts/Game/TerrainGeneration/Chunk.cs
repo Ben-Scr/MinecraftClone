@@ -1,3 +1,4 @@
+using System;
 using System.Diagnostics;
 using Unity.Collections;
 using Unity.Jobs;
@@ -21,7 +22,16 @@ namespace BenScr.MCC
 
         public byte[,,] blocks;
 
-        public bool isGenerated = false;
+        public bool isGenerated;
+        public bool isAirOnly = true;
+
+        public short lowestGroundLevel = short.MaxValue;
+        public short highestGroundLevel = short.MinValue;
+        public bool IsTop => (highestGroundLevel - position.y) < CHUNK_HEIGHT;
+        public bool RequireChunkBelow => lowestGroundLevel < position.y;
+
+        public bool IsBottom => (lowestGroundLevel - position.y) <= 0;
+
         public GameObject gameObject;
         public MeshRenderer meshRenderer;
         public MeshFilter meshFilter;
@@ -60,10 +70,10 @@ namespace BenScr.MCC
                 {
                     Generate();
 
-                    Chunk front = ChunkUtility.GetChunkByCoordinate(coordinate.x, coordinate.y, coordinate.z + 1);
-                    Chunk back = ChunkUtility.GetChunkByCoordinate(coordinate.x, coordinate.y, coordinate.z - 1);
-                    Chunk right = ChunkUtility.GetChunkByCoordinate(coordinate.x + 1, coordinate.y, coordinate.z);
-                    Chunk left = ChunkUtility.GetChunkByCoordinate(coordinate.x - 1, coordinate.y, coordinate.z);
+                    Chunk front = ChunkUtility.GetChunkByCoordinate(new Vector3Int(coordinate.x, coordinate.y, coordinate.z + 1));
+                    Chunk back = ChunkUtility.GetChunkByCoordinate(new Vector3Int(coordinate.x, coordinate.y, coordinate.z - 1));
+                    Chunk right = ChunkUtility.GetChunkByCoordinate(new Vector3Int(coordinate.x + 1, coordinate.y, coordinate.z));
+                    Chunk left = ChunkUtility.GetChunkByCoordinate(new Vector3Int(coordinate.x - 1, coordinate.y, coordinate.z));
 
                     if (front != null && blockPosition.z == CHUNK_SIZE - 1) front.Generate();
                     if (back != null && blockPosition.z == 0) back.Generate();
@@ -90,7 +100,31 @@ namespace BenScr.MCC
             gameObject.transform.position = new Vector3(coordinate.x * CHUNK_SIZE, coordinate.y * CHUNK_HEIGHT, coordinate.z * CHUNK_SIZE);
             position = gameObject.transform.position;
 
-            PrepareCubes();
+            bool isAboveTopChunk = ChunkUtility.GetChunkByCoordinate(coordinate + Vector3Int.down)?.IsTop ?? false;
+            Chunk topChunk = ChunkUtility.GetChunkByCoordinate(coordinate + Vector3Int.up);
+            bool requireChunkBelow = !isAboveTopChunk && (topChunk?.RequireChunkBelow ?? true);
+
+            if (!isAboveTopChunk && requireChunkBelow)
+            {
+                PrepareCubes();
+                isGenerated = isAirOnly;
+            }
+            else
+            {
+                blocks = new byte[CHUNK_SIZE, CHUNK_HEIGHT, CHUNK_SIZE];
+
+                if (!isAboveTopChunk && !requireChunkBelow)
+                {
+                    for (int i = 0; i < CHUNK_SIZE; i++)
+                        for (int j = 0; j < CHUNK_HEIGHT; j++)
+                            for (int k = 0; k < CHUNK_SIZE; k++)
+                                blocks[i, j, k] = BLOCK_LEAVES + 1;
+                }
+                isGenerated = true;
+            }
+
+
+
         }
         private void PrepareCubes() // average sw time: 0 ms (max 1ms)
         {
@@ -120,7 +154,6 @@ namespace BenScr.MCC
                 heightHandle.Complete();
 
 
-
                 for (int x = 0; x < CHUNK_SIZE; x++)
                 {
                     for (int z = 0; z < CHUNK_SIZE; z++)
@@ -128,6 +161,11 @@ namespace BenScr.MCC
                         int index = z * CHUNK_SIZE + x;
                         float normalizedHeight = math.clamp(heightMap[index], 0f, 1f);
                         int groundLevel = (int)math.floor(normalizedHeight * TerrainGenerator.instance.noiseHeight) + TerrainGenerator.instance.groundOffset;
+
+                        if (groundLevel < lowestGroundLevel)
+                            lowestGroundLevel = (short)groundLevel;
+                        if (groundLevel > highestGroundLevel)
+                            highestGroundLevel = (short)groundLevel;
 
                         for (int y = 0; y < CHUNK_HEIGHT; y++)
                         {
@@ -144,6 +182,8 @@ namespace BenScr.MCC
                             }
                             else
                             {
+                                isAirOnly = false;
+
                                 if (worldY == groundLevel)
                                 {
                                     blocks[x, y, z] = BLOCK_GRASS;
@@ -243,12 +283,12 @@ namespace BenScr.MCC
             }
 
             // Fetch neighbouring chunks for the six faces.
-            Chunk negX = ChunkUtility.GetChunkByCoordinate(coordinate.x - 1, coordinate.y, coordinate.z);
-            Chunk posX = ChunkUtility.GetChunkByCoordinate(coordinate.x + 1, coordinate.y, coordinate.z);
-            Chunk negY = ChunkUtility.GetChunkByCoordinate(coordinate.x, coordinate.y - 1, coordinate.z);
-            Chunk posY = ChunkUtility.GetChunkByCoordinate(coordinate.x, coordinate.y + 1, coordinate.z);
-            Chunk negZ = ChunkUtility.GetChunkByCoordinate(coordinate.x, coordinate.y, coordinate.z - 1);
-            Chunk posZ = ChunkUtility.GetChunkByCoordinate(coordinate.x, coordinate.y, coordinate.z + 1);
+            Chunk negX = ChunkUtility.GetChunkByCoordinate(new Vector3Int(coordinate.x - 1, coordinate.y, coordinate.z));
+            Chunk posX = ChunkUtility.GetChunkByCoordinate(new Vector3Int(coordinate.x + 1, coordinate.y, coordinate.z));
+            Chunk negY = ChunkUtility.GetChunkByCoordinate(new Vector3Int(coordinate.x, coordinate.y - 1, coordinate.z));
+            Chunk posY = ChunkUtility.GetChunkByCoordinate(new Vector3Int(coordinate.x, coordinate.y + 1, coordinate.z));
+            Chunk negZ = ChunkUtility.GetChunkByCoordinate(new Vector3Int(coordinate.x, coordinate.y, coordinate.z - 1));
+            Chunk posZ = ChunkUtility.GetChunkByCoordinate(new Vector3Int(coordinate.x, coordinate.y, coordinate.z + 1));
 
             // West face (x = -1 relative to chunk).
             for (int y = 0; y < SY; y++)

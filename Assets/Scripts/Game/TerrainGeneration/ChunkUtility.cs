@@ -42,14 +42,35 @@ namespace BenScr.MCC
 
             return true;
         }
-        public static Chunk GetChunkByCoordinate(int chunkX, int chunkY, int chunkZ)
+        public static Chunk GetChunkByCoordinate(Vector3Int coordinate)
         {
-            if (TerrainGenerator.chunks.TryGetValue(new Vector3Int(chunkX, chunkY, chunkZ), out Chunk chunk))
+            if (TerrainGenerator.chunks.TryGetValue(coordinate, out Chunk chunk))
             {
                 return chunk;
             }
 
             return null;
         }
+        public static Vector3Int GetChunkCoordinateFromPosition(Vector3 position)
+        {
+            int chunkX = Mathf.FloorToInt(position.x / Chunk.CHUNK_SIZE);
+            int chunkY = Mathf.FloorToInt(position.y / Chunk.CHUNK_HEIGHT);
+            int chunkZ = Mathf.FloorToInt(position.z / Chunk.CHUNK_SIZE);
+
+            return new Vector3Int(chunkX, chunkY, chunkZ);
+        }
+
+        public static Chunk GetChunkByPosition(Vector3 position)
+        {
+            Vector3Int coordinate = GetChunkCoordinateFromPosition(position);
+
+            if (TerrainGenerator.chunks.TryGetValue(new Vector3Int(coordinate.x, coordinate.y, coordinate.z), out Chunk chunk))
+            {
+                return chunk;
+            }
+
+            return null;
+        }
+
     }
 }
