@@ -169,7 +169,7 @@ namespace BenScr.MCC
             return new ChunkMeshData(triangles, vertices, normals, uvs);
         }
 
-        private static void AddTexture(int textureId, FaceDefinition face, int uLength, int vLength, ref List<Vector2> uvs)
+        private static void AddTexture(int textureId, int uLength, int vLength, ref List<Vector2> uvs)
         {
             int col = textureId % TEXTURE_BLOCKS_COLS;
             int rowFromTop = TEXTURE_BLOCKS_ROWS - 1 - (textureId / TEXTURE_BLOCKS_COLS);
@@ -186,18 +186,13 @@ namespace BenScr.MCC
             float u1 = u + BLOCK_W - epsU;
             float v1 = v + BLOCK_H - epsV;
 
-            float uStart = face.UStep > 0 ? u0 : u1;
-            float uEnd = face.UStep > 0 ? u1 : u0;
-            float vStart = face.VStep > 0 ? v0 : v1;
-            float vEnd = face.VStep > 0 ? v1 : v0;
+            float uSpan = (u1 - u0) * vLength;
+            float vSpan = (v1 - v0) * uLength;
 
-            float uSpan = (uEnd - uStart) * uLength;
-            float vSpan = (vEnd - vStart) * vLength;
-
-            Vector2 uv0 = new Vector2(uStart, vStart);
-            Vector2 uv1 = new Vector2(uStart + uSpan, vStart);
-            Vector2 uv2 = new Vector2(uStart, vStart + vSpan);
-            Vector2 uv3 = new Vector2(uStart + uSpan, vStart + vSpan);
+            Vector2 uv0 = new Vector2(u0, v0);
+            Vector2 uv1 = new Vector2(u0, v0 + vSpan);
+            Vector2 uv2 = new Vector2(u0 + uSpan, v0);
+            Vector2 uv3 = new Vector2(u0 + uSpan, v0 + vSpan);
 
             uvs.Add(uv0);
             uvs.Add(uv1);
@@ -323,7 +318,7 @@ namespace BenScr.MCC
             triangles.Add(vertexIndex + 1);
             triangles.Add(vertexIndex + 3);
 
-            AddTexture(textureId, face, uLength, vLength, ref uvs);
+            AddTexture(textureId, uLength, vLength, ref uvs);
 
             vertexIndex += 4;
         }
