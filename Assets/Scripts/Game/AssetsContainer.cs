@@ -7,6 +7,8 @@ namespace BenScr.MCC
         public Block[] blocks;
 
         public Material blockMaterial;
+        public Material fluidMaterial;
+
         [SerializeField] private int blockTexResolution = 16;
 
         public static AssetsContainer instance;

@@ -10,6 +10,7 @@ namespace BenScr.MCC
         internal ushort id;
         public int durability;
         public bool isTransparent;
+        public bool isFluid;
 
         public int backTexture;
         public int frontTexture;

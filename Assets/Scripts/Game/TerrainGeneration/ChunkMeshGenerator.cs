@@ -63,7 +63,10 @@ namespace BenScr.MCC
                                 int neighborBlockId = GetHalo(haloBlocks, position + cubeNormals[face]);
                                 Block neighbourBlock = GetBlock(neighborBlockId);
 
-                                if (neighbourBlock.isTransparent)
+                                bool neighbourIsTransparent = neighbourBlock.isTransparent;
+                                bool hidesFaceBecauseSameFluid = block.isFluid && neighbourBlock.id == block.id;
+
+                                if (neighbourIsTransparent && !hidesFaceBecauseSameFluid)
                                 {
                                     vertices.Add(position + cubeVertices[cubeTriangles[face, 0]]);
                                     vertices.Add(position + cubeVertices[cubeTriangles[face, 1]]);

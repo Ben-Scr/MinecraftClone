@@ -101,7 +101,13 @@ namespace BenScr.MCC
             meshFilter = gameObject.GetComponent<MeshFilter>();
             meshRenderer = gameObject.GetComponent<MeshRenderer>();
 
-            meshRenderer.material = AssetsContainer.instance.blockMaterial;
+
+            var materials = meshRenderer.sharedMaterials;
+            Array.Resize(ref materials, 2);
+            materials[0] = AssetsContainer.instance.blockMaterial;
+            materials[1] = AssetsContainer.instance.fluidMaterial;
+            meshRenderer.sharedMaterials = materials;
+
             gameObject.transform.position = new Vector3(coordinate.x * CHUNK_SIZE, coordinate.y * CHUNK_HEIGHT, coordinate.z * CHUNK_SIZE);
             position = gameObject.transform.position;
 
@@ -258,7 +264,7 @@ namespace BenScr.MCC
 
                 if (worldY > groundLevel)
                 {
-                    int waterLevel = GroundOffset + 8; // frei wählbarer Wert
+                    int waterLevel = GroundOffset + 4; // frei wählbarer Wert
                     if (worldY <= waterLevel)
                     {
                         blockId = BLOCK_WATER;
