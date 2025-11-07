@@ -289,8 +289,8 @@ namespace BenScr.MCC
             if (isInFluid)
             {
                 rb.useGravity = false;
-                rb.drag = swimDrag;
-                rb.angularDrag = swimAngularDrag;
+                rb.linearDamping = swimDrag;
+                rb.angularDamping = swimAngularDrag;
             }
             else if (wasInFluid)
             {
@@ -301,8 +301,8 @@ namespace BenScr.MCC
         private void ExitFluid()
         {
             rb.useGravity = !isFlying;
-            rb.drag = defaultDrag;
-            rb.angularDrag = defaultAngularDrag;
+            rb.linearDamping = defaultDrag;
+            rb.angularDamping = defaultAngularDrag;
             currentFluidBlock = null;
             isInFluid = false;
         }

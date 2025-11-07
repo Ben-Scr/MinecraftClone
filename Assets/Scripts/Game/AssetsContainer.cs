@@ -42,7 +42,7 @@ namespace BenScr.MCC
 
             InitBlocks();
             InitTextureValues();
-            ConfigureFluidMaterial();
+            //ConfigureFluidMaterial();
         }
 
         private void ConfigureFluidMaterial()
