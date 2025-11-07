@@ -44,6 +44,7 @@ namespace BenScr.MCC
         [SerializeField] private float swimLerpSpeed = 5f;
         [SerializeField] private float swimDrag = 3f;
         [SerializeField] private float swimAngularDrag = 1.5f;
+        private UnderwaterPostEffect underwaterEffect;
 
         private float curFlySpeedMultiplier = 1;
         private bool isFlying => movementMode == MovementMode.Flying;
@@ -59,6 +60,9 @@ namespace BenScr.MCC
         private float inputSpace = 0;
         public static PlayerController instance;
 
+        public bool IsInFluid => isInFluid;
+        public Block CurrentFluidBlock => currentFluidBlock;
+
         private void Awake()
         {
             instance = this;
@@ -70,6 +74,18 @@ namespace BenScr.MCC
             capsuleCollider = GetComponentInChildren<CapsuleCollider>();
             Cursor.lockState = CursorLockMode.Locked;
             Cursor.visible = false;
+
+            if (playerCamera != null)
+            {
+                playerCamera.depthTextureMode |= DepthTextureMode.Depth;
+
+                if (!playerCamera.TryGetComponent(out underwaterEffect))
+                {
+                    underwaterEffect = playerCamera.gameObject.AddComponent<UnderwaterPostEffect>();
+                }
+
+                underwaterEffect.Initialize(this);
+            }
 
             if (rb != null)
             {
