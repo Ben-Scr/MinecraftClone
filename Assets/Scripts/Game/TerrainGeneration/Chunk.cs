@@ -4,6 +4,7 @@ using Unity.Collections;
 using Unity.Jobs;
 using Unity.Mathematics;
 using UnityEngine;
+using static BenScr.MCC.SettingsContainer;
 
 namespace BenScr.MCC
 {
@@ -118,13 +119,11 @@ namespace BenScr.MCC
                     for (int i = 0; i < CHUNK_SIZE; i++)
                         for (int j = 0; j < CHUNK_HEIGHT; j++)
                             for (int k = 0; k < CHUNK_SIZE; k++)
-                                blocks[i, j, k] = BLOCK_LEAVES + 1;
+                                blocks[i, j, k] = BLOCK_STONE;
                 }
+
                 isGenerated = true;
             }
-
-
-
         }
         private void PrepareCubes() // average sw time: 0 ms (max 1ms)
         {
@@ -188,7 +187,7 @@ namespace BenScr.MCC
                                 {
                                     blocks[x, y, z] = BLOCK_GRASS;
 
-                                    if (TerrainGenerator.instance.addTrees)
+                                    if (TerrainGenerator.instance.addTrees && y < 13)
                                     {
                                         if (x > 3 && z > 3 && x < CHUNK_SIZE - 3 && z < CHUNK_SIZE - 3)
                                         {
@@ -437,7 +436,7 @@ namespace BenScr.MCC
                 ? UnityEngine.Rendering.IndexFormat.UInt32
                 : UnityEngine.Rendering.IndexFormat.UInt16;
 
-            if (mesh.indexFormat == UnityEngine.Rendering.IndexFormat.UInt32)
+            if (mesh.indexFormat == UnityEngine.Rendering.IndexFormat.UInt32 && Settings.DebugRendering)
             {
                 UnityEngine.Debug.LogWarning("Mesh index format set to UInt32 due to large vertex count.");
             }

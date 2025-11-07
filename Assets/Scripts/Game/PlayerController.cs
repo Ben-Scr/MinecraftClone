@@ -1,4 +1,5 @@
 using UnityEngine;
+using static BenScr.MCC.SettingsContainer;
 
 namespace BenScr.MCC
 {
@@ -33,13 +34,15 @@ namespace BenScr.MCC
         [Header("Physics")]
         [SerializeField] private float maxVelocityY = 50f;
         [SerializeField] private float minVelocityY = -50f;
+        [SerializeField] private Vector3 groundedSize;
+        [SerializeField] private Vector3 groundedOffset;
 
         private float curFlySpeedMultiplier = 1;
         private bool isFlying => movementMode == MovementMode.Flying;
-        private bool isSpectator => isFlying && !boxCollider.enabled;
+        private bool isSpectator => isFlying && !capsuleCollider.enabled;
 
         private Rigidbody rb;
-        private BoxCollider boxCollider;
+        private CapsuleCollider capsuleCollider;
 
         private float inputSpace = 0;
         public static PlayerController instance;
@@ -52,7 +55,7 @@ namespace BenScr.MCC
                 playerCamera = GetComponentInChildren<Camera>();
 
             rb = GetComponent<Rigidbody>();
-            boxCollider = GetComponentInChildren<BoxCollider>();
+            capsuleCollider = GetComponentInChildren<CapsuleCollider>();
             Cursor.lockState = CursorLockMode.Locked;
             Cursor.visible = false;
         }
@@ -76,6 +79,11 @@ namespace BenScr.MCC
                 playerMeshTr.eulerAngles.y,
                 eulerAnglesX.z
                 );
+
+            if (!isFlying && IsGrounded() && rb.linearVelocity.magnitude < 0.1f)
+            {
+                rb.linearVelocity = Vector3.zero;
+            }
 
             if (Input.GetKey(KeyCode.Space) && IsGrounded())
             {
@@ -144,7 +152,7 @@ namespace BenScr.MCC
         public void SetSpectatorMode()
         {
             if (!isFlying || isSpectator) SetFlyingMode();
-            boxCollider.enabled = !isFlying;
+            capsuleCollider.enabled = !isFlying;
             rb.constraints = isFlying ? RigidbodyConstraints.FreezeAll : RigidbodyConstraints.FreezeRotation;
         }
 
@@ -155,7 +163,7 @@ namespace BenScr.MCC
 
         public bool IsGrounded()
         {
-            return Physics.CheckBox(transform.position + new Vector3(0, -0.1f, 0), transform.localScale / 2.1f, Quaternion.identity, ~LayerMask.GetMask("Player"));
+            return Physics.CheckBox(transform.position + groundedOffset, groundedSize / 2f, Quaternion.identity, ~LayerMask.GetMask("Player"));
         }
 
         public Vector3 GetInput()
@@ -188,6 +196,13 @@ namespace BenScr.MCC
 
             input *= speed;
             return input;
+        }
+
+        private void OnDrawGizmos()
+        {
+            if(!Settings?.DebugGizmos ?? false) return;
+
+            Gizmos.DrawWireCube(transform.position + groundedOffset, groundedSize / 2f);
         }
     }
 }

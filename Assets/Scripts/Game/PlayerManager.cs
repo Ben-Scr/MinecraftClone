@@ -80,7 +80,8 @@ namespace BenScr.MCC
                         Debug.Log("Highlighted block: " + AssetsContainer.GetBlock(blockID).name);
                         Debug.Log("In Chunk at position " + chunk.coordinate + " AirOnly:" + chunk.isAirOnly
                             + " HighestGroundlevel:" + chunk.highestGroundLevel + " LowestGroundlevel:" 
-                            + chunk.lowestGroundLevel + " IsTop:" + chunk.IsTop);
+                            + chunk.lowestGroundLevel + " IsTop:" + chunk.IsTop
+                            + " IsGenerated:"+ chunk.isGenerated);
                     }
 
                     highlightBlock.transform.position = highlightPosition + new Vector3(0.5f, 0.5f, 0.5f);

@@ -70,16 +70,17 @@ namespace BenScr.MCC
 
 
         public static readonly Dictionary<Vector3Int, Chunk> chunks = new();
-        private readonly HashSet<Vector3Int> lastActiveChunks = new(512);
-        private readonly Queue<Vector3Int> chunksToCreate = new(512);
-        private readonly Queue<Vector3Int> chunksToGenerate = new(512);
+        private readonly HashSet<Vector3Int> lastActiveChunks = new();
+        private readonly Queue<Vector3Int> chunksToCreate = new();
+        private readonly Queue<Vector3Int> chunksToGenerate = new();
 
-        private readonly HashSet<Vector3Int> queuedChunks = new(512);
-        private readonly HashSet<Vector3Int> currentActiveChunks = new(512);
+        private readonly HashSet<Vector3Int> queuedChunks = new();
+        private readonly HashSet<Vector3Int> currentActiveChunks = new();
 
         private Vector3 lastChunkUpdatePlayerPosition;
         [SerializeField] private int maxChunksCreatePerFrame = 2;
         [SerializeField] private int maxChunksGeneratePerFrame = 2;
+        [SerializeField] private float addColliderDistance = 10f;
 
         public static TerrainGenerator instance;
         private Vector3Int[] poses;
@@ -199,9 +200,6 @@ namespace BenScr.MCC
             {
                 Vector3Int pos = poses[i];
 
-                //if (pos.x * pos.x + pos.z * pos.z >= viewDistanceXZSq || pos.y * pos.y >= viewDistanceYSq)
-                //    continue;
-
                 var coordinate = new Vector3Int(playerChunk.x + pos.x, playerChunk.y + pos.y, playerChunk.z + pos.z);
 
                 if (!chunks.TryGetValue(coordinate, out var chunk))
@@ -216,12 +214,12 @@ namespace BenScr.MCC
 
                     if (addColliders && chunk.meshCollider == null)
                     {
-                        float distanceX = playerPosition.x - chunk.position.x;
-                        float distanceY = playerPosition.y - chunk.position.y;
-                        float distanceZ = playerPosition.z - chunk.position.z;
+                        float distanceX = math.abs(playerPosition.x - chunk.position.x);
+                        float distanceY = math.abs(playerPosition.y - chunk.position.y);
+                        float distanceZ = math.abs(playerPosition.z - chunk.position.z);
 
-                        float maxDistance = Chunk.CHUNK_SIZE + 5f;
-                        if (distanceX * distanceX + distanceZ * distanceZ + distanceY * distanceY <= maxDistance * maxDistance)
+                        float maxDistance = Chunk.CHUNK_SIZE + addColliderDistance;
+                        if (distanceX + distanceZ + distanceY <= maxDistance)
                             chunk.AddMeshCollider();
                     }
                 }
@@ -236,7 +234,7 @@ namespace BenScr.MCC
                 var targetChunk = new Chunk(coordinate.x, coordinate.y, coordinate.z);
                 targetChunk.Prepare();
                 chunks.Add(targetChunk.coordinate, targetChunk);
-                if(!targetChunk.isGenerated)
+                //if(!targetChunk.isGenerated)
                 chunksToGenerate.Enqueue(targetChunk.coordinate);
 
                 if (movedEnough) currentActiveChunks.Add(targetChunk.coordinate);
@@ -283,12 +281,12 @@ namespace BenScr.MCC
 
         public bool HasAllNeighborChunks(Vector3Int chunkCoord)
         {
-            return chunks.ContainsKey(new Vector3Int(chunkCoord.x + 1, 0, chunkCoord.z)) &&
-                   chunks.ContainsKey(new Vector3Int(chunkCoord.x - 1, 0, chunkCoord.z)) &&
-                   chunks.ContainsKey(new Vector3Int(chunkCoord.x, 0, chunkCoord.z + 1)) &&
-                   chunks.ContainsKey(new Vector3Int(chunkCoord.x, 0, chunkCoord.z - 1)) &&
-                   chunks.ContainsKey(new Vector3Int(chunkCoord.x, chunkCoord.y - 1, chunkCoord.z)) &&
-                   chunks.ContainsKey(new Vector3Int(chunkCoord.x, chunkCoord.y + 1, chunkCoord.z));
+            return chunks.ContainsKey(chunkCoord + Vector3Int.right) &&
+                   chunks.ContainsKey(chunkCoord + Vector3Int.left) &&
+                   chunks.ContainsKey(chunkCoord + Vector3Int.forward) &&
+                   chunks.ContainsKey(chunkCoord + Vector3Int.back) &&
+                   chunks.ContainsKey(chunkCoord + Vector3Int.up) &&
+                   chunks.ContainsKey(chunkCoord + Vector3Int.down);
         }
 
 
