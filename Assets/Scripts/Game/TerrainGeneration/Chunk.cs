@@ -42,6 +42,10 @@ namespace BenScr.MCC
         public MeshFilter meshFilter;
         public MeshCollider meshCollider;
 
+        public GameObject fluidGameObject;
+        public MeshRenderer fluidRenderer;
+        public MeshFilter fluidFilter;
+
         public Vector3Int coordinate;
         public Vector3 position;
 
@@ -101,15 +105,15 @@ namespace BenScr.MCC
             meshFilter = gameObject.GetComponent<MeshFilter>();
             meshRenderer = gameObject.GetComponent<MeshRenderer>();
 
-
-            var materials = meshRenderer.sharedMaterials;
-            Array.Resize(ref materials, 2);
-            materials[0] = AssetsContainer.instance.blockMaterial;
-            materials[1] = AssetsContainer.instance.fluidMaterial;
-            meshRenderer.sharedMaterials = materials;
+            meshRenderer.material = AssetsContainer.instance.blockMaterial;
 
             gameObject.transform.position = new Vector3(coordinate.x * CHUNK_SIZE, coordinate.y * CHUNK_HEIGHT, coordinate.z * CHUNK_SIZE);
             position = gameObject.transform.position;
+
+            fluidGameObject = gameObject.transform.GetChild(0).gameObject;
+            fluidRenderer = fluidGameObject.GetComponent<MeshRenderer>();
+            fluidFilter = fluidGameObject.GetComponent<MeshFilter>();
+            fluidRenderer.material = AssetsContainer.instance.fluidMaterial;
 
             bool isAboveTopChunk = ChunkUtility.GetChunkByCoordinate(coordinate + Vector3Int.down)?.IsTop ?? false;
 
@@ -541,25 +545,48 @@ namespace BenScr.MCC
         {
             if (meshFilter == null) return;
 
-            Mesh mesh = new Mesh();
-            bool needs32 = meshData.vertices.Length > short.MaxValue || meshData.triangles.Length > short.MaxValue;
-            mesh.indexFormat = needs32
+            ChunkMeshSection solidMeshData = meshData.solidMesh;
+            ChunkMeshSection fluidMeshData = meshData.fluidMesh;
+
+          
+            Mesh solidMesh = new Mesh();
+            bool needs32 = solidMeshData.vertices.Length > short.MaxValue || solidMeshData.triangles.Length > short.MaxValue;
+            solidMesh.indexFormat = needs32
                 ? UnityEngine.Rendering.IndexFormat.UInt32
                 : UnityEngine.Rendering.IndexFormat.UInt16;
 
-            if (mesh.indexFormat == UnityEngine.Rendering.IndexFormat.UInt32 && Settings.DebugRendering)
+            if (solidMesh.indexFormat == UnityEngine.Rendering.IndexFormat.UInt32 && Settings.DebugRendering)
             {
                 UnityEngine.Debug.LogWarning("Mesh index format set to UInt32 due to large vertex count.");
             }
 
-            mesh.vertices = meshData.vertices;
-            mesh.normals = meshData.normals;
-            mesh.triangles = meshData.triangles;
-            mesh.uv = meshData.uvs;
-            meshFilter.mesh = mesh;
+            solidMesh.vertices = solidMeshData.vertices;
+            solidMesh.triangles = solidMeshData.triangles;
+            solidMesh.normals = solidMeshData.normals;
+            solidMesh.uv = solidMeshData.uvs;
+
+   
+            meshFilter.mesh = solidMesh;
 
             if (meshCollider != null)
-                meshCollider.sharedMesh = mesh;
+            {
+                if (solidMeshData.vertices.Length == 0 || solidMeshData.triangles.Length == 0)
+                {
+                    meshCollider.sharedMesh = null;
+                }
+                else
+                {
+                    meshCollider.sharedMesh = solidMesh;
+                }
+            }
+
+            Mesh fluidMesh = new Mesh();
+            fluidMesh.vertices = fluidMeshData.vertices;
+            fluidMesh.triangles = fluidMeshData.triangles;
+            fluidMesh.normals = fluidMeshData.normals;
+            fluidMesh.uv = fluidMeshData.uvs;
+
+            fluidFilter.sharedMesh = fluidMesh;
         }
 
         public void SetActive(bool enabled)

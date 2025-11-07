@@ -38,12 +38,18 @@ namespace BenScr.MCC
 
         public static ChunkMeshData GenerateMeshData([ReadOnly] in byte[,,] haloBlocks)
         {
-            List<Vector3> vertices = new List<Vector3>();
-            List<Vector3> normals = new List<Vector3>();
-            List<int> triangles = new List<int>();
-            List<Vector2> uvs = new List<Vector2>();
+            List<Vector3> solidVertices = new List<Vector3>();
+            List<Vector3> solidNormals = new List<Vector3>();
+            List<int> solidTriangles = new List<int>();
+            List<Vector2> solidUvs = new List<Vector2>();
 
-            int vertexIndex = 0;
+            List<Vector3> fluidVertices = new List<Vector3>();
+            List<Vector3> fluidNormals = new List<Vector3>();
+            List<int> fluidTriangles = new List<int>();
+            List<Vector2> fluidUvs = new List<Vector2>();
+
+            int solidVertexIndex = 0;
+            int fluidVertexIndex = 0;
 
             for (int x = 0; x < Chunk.CHUNK_SIZE; x++)
             {
@@ -57,6 +63,7 @@ namespace BenScr.MCC
                         if (blockId != Chunk.BLOCK_AIR)
                         {
                             Vector3Int position = new Vector3Int(x, y, z);
+                            bool isFluid = block.isFluid;
 
                             for (int face = 0; face < 6; face++)
                             {
@@ -68,26 +75,14 @@ namespace BenScr.MCC
 
                                 if (neighbourIsTransparent && !hidesFaceBecauseSameFluid)
                                 {
-                                    vertices.Add(position + cubeVertices[cubeTriangles[face, 0]]);
-                                    vertices.Add(position + cubeVertices[cubeTriangles[face, 1]]);
-                                    vertices.Add(position + cubeVertices[cubeTriangles[face, 2]]);
-                                    vertices.Add(position + cubeVertices[cubeTriangles[face, 3]]);
-
-                                    for (int i = 0; i < 4; i++)
+                                    if (isFluid)
                                     {
-                                        normals.Add(cubeNormals[face]);
+                                        AddFace(position, face, block, fluidVertices, fluidNormals, fluidTriangles, fluidUvs, ref fluidVertexIndex);
                                     }
-
-                                    AddTexture(block.GetTexture(face), ref uvs);
-
-                                    triangles.Add(vertexIndex);
-                                    triangles.Add(vertexIndex + 1);
-                                    triangles.Add(vertexIndex + 2);
-                                    triangles.Add(vertexIndex + 2);
-                                    triangles.Add(vertexIndex + 1);
-                                    triangles.Add(vertexIndex + 3);
-
-                                    vertexIndex += 4;
+                                    else
+                                    {
+                                        AddFace(position, face, block, solidVertices, solidNormals, solidTriangles, solidUvs, ref solidVertexIndex);
+                                    }
                                 }
                             }
                         }
@@ -95,7 +90,41 @@ namespace BenScr.MCC
                 }
             }
 
-            return new ChunkMeshData(triangles, vertices, normals, uvs);
+            return new ChunkMeshData(
+                new ChunkMeshSection(solidTriangles, solidVertices, solidNormals, solidUvs),
+                new ChunkMeshSection(fluidTriangles, fluidVertices, fluidNormals, fluidUvs));
+        }
+
+        private static void AddFace(
+           Vector3Int position,
+           int face,
+           Block block,
+           List<Vector3> vertices,
+           List<Vector3> normals,
+           List<int> triangles,
+           List<Vector2> uvs,
+           ref int vertexIndex)
+        {
+            vertices.Add(position + cubeVertices[cubeTriangles[face, 0]]);
+            vertices.Add(position + cubeVertices[cubeTriangles[face, 1]]);
+            vertices.Add(position + cubeVertices[cubeTriangles[face, 2]]);
+            vertices.Add(position + cubeVertices[cubeTriangles[face, 3]]);
+
+            for (int i = 0; i < 4; i++)
+            {
+                normals.Add(cubeNormals[face]);
+            }
+
+            AddTexture(block.GetTexture(face), ref uvs);
+
+            triangles.Add(vertexIndex);
+            triangles.Add(vertexIndex + 1);
+            triangles.Add(vertexIndex + 2);
+            triangles.Add(vertexIndex + 2);
+            triangles.Add(vertexIndex + 1);
+            triangles.Add(vertexIndex + 3);
+
+            vertexIndex += 4;
         }
 
         private static byte GetHalo(byte[,,] haloBlocks, Vector3Int pos)
@@ -181,12 +210,24 @@ namespace BenScr.MCC
 
     public readonly struct ChunkMeshData
     {
+        public readonly ChunkMeshSection solidMesh;
+        public readonly ChunkMeshSection fluidMesh;
+
+        public ChunkMeshData(ChunkMeshSection solidMesh, ChunkMeshSection fluidMesh)
+        {
+            this.solidMesh = solidMesh;
+            this.fluidMesh = fluidMesh;
+        }
+    }
+
+    public readonly struct ChunkMeshSection
+    {
         public readonly int[] triangles;
         public readonly Vector3[] vertices;
         public readonly Vector3[] normals;
         public readonly Vector2[] uvs;
 
-        public ChunkMeshData(List<int> triangles, List<Vector3> vertices, List<Vector3> normals, List<Vector2> uvs)
+        public ChunkMeshSection(List<int> triangles, List<Vector3> vertices, List<Vector3> normals, List<Vector2> uvs)
         {
             this.triangles = triangles.ToArray();
             this.vertices = vertices.ToArray();
