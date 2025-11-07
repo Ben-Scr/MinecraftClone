@@ -51,6 +51,7 @@ namespace BenScr.MCC
 
             return null;
         }
+
         public static Vector3Int GetChunkCoordinateFromPosition(Vector3 position)
         {
             int chunkX = Mathf.FloorToInt(position.x / Chunk.CHUNK_SIZE);

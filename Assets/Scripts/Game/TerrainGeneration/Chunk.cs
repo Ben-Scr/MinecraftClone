@@ -102,10 +102,10 @@ namespace BenScr.MCC
             position = gameObject.transform.position;
 
             bool isAboveTopChunk = ChunkUtility.GetChunkByCoordinate(coordinate + Vector3Int.down)?.IsTop ?? false;
-            Chunk topChunk = ChunkUtility.GetChunkByCoordinate(coordinate + Vector3Int.up);
-            bool requireChunkBelow = !isAboveTopChunk && (topChunk?.RequireChunkBelow ?? true);
+          //  Chunk topChunk = ChunkUtility.GetChunkByCoordinate(coordinate + Vector3Int.up);
+           // bool requireChunkBelow = !isAboveTopChunk && (topChunk?.RequireChunkBelow ?? true);
 
-            if (!isAboveTopChunk && requireChunkBelow)
+            if (!isAboveTopChunk)
             {
                 PrepareCubes();
                 isGenerated = isAirOnly;
@@ -114,13 +114,13 @@ namespace BenScr.MCC
             {
                 blocks = new byte[CHUNK_SIZE, CHUNK_HEIGHT, CHUNK_SIZE];
 
-                if (!isAboveTopChunk && !requireChunkBelow)
-                {
-                    for (int i = 0; i < CHUNK_SIZE; i++)
-                        for (int j = 0; j < CHUNK_HEIGHT; j++)
-                            for (int k = 0; k < CHUNK_SIZE; k++)
-                                blocks[i, j, k] = BLOCK_STONE;
-                }
+                //if (!isAboveTopChunk && !requireChunkBelow)
+                //{
+                //    for (int i = 0; i < CHUNK_SIZE; i++)
+                //        for (int j = 0; j < CHUNK_HEIGHT; j++)
+                //            for (int k = 0; k < CHUNK_SIZE; k++)
+                //                blocks[i, j, k] = BLOCK_STONE;
+                //}
 
                 isGenerated = true;
             }
@@ -166,6 +166,9 @@ namespace BenScr.MCC
                         if (groundLevel > highestGroundLevel)
                             highestGroundLevel = (short)groundLevel;
 
+                        int worldX = coordinate.x * CHUNK_SIZE + x;
+                        int worldZ = coordinate.z * CHUNK_SIZE + z;
+
                         for (int y = 0; y < CHUNK_HEIGHT; y++)
                         {
                             if (blocks[x, y, z] != BLOCK_AIR)
@@ -175,38 +178,51 @@ namespace BenScr.MCC
 
                             int worldY = coordinate.y * CHUNK_HEIGHT + y;
 
+                            byte blockId;
+
                             if (worldY > groundLevel)
                             {
-                                blocks[x, y, z] = BLOCK_AIR;
+                                blockId = BLOCK_AIR;
                             }
                             else
                             {
-                                isAirOnly = false;
-
                                 if (worldY == groundLevel)
                                 {
-                                    blocks[x, y, z] = BLOCK_GRASS;
-
-                                    if (TerrainGenerator.instance.addTrees && y < 13)
-                                    {
-                                        if (x > 3 && z > 3 && x < CHUNK_SIZE - 3 && z < CHUNK_SIZE - 3)
-                                        {
-                                            if (UnityEngine.Random.Range(0, 50) == 0)
-                                            {
-                                                AddTree(x, y + 1, z);
-                                            }
-                                        }
-                                    }
+                                    blockId = BLOCK_GRASS;
+                                }
+                                else if (worldY > groundLevel - 5)
+                                {
+                                    blockId = BLOCK_DIRT;
                                 }
                                 else
                                 {
-                                    if (worldY > groundLevel - 5)
+                                    blockId = BLOCK_STONE;
+                                }
+
+                                if (blockId != BLOCK_AIR)
+                                {
+                                    float3 worldPosition = new float3(worldX, worldY, worldZ);
+                                    if (TerrainGenerator.instance.ShouldCarveCave(worldPosition, groundLevel))
                                     {
-                                        blocks[x, y, z] = BLOCK_DIRT;
+                                        blockId = BLOCK_AIR;
                                     }
-                                    else
+                                }
+                            }
+
+                            blocks[x, y, z] = blockId;
+
+                            if (blockId != BLOCK_AIR)
+                            {
+                                isAirOnly = false;
+
+                                if (blockId == BLOCK_GRASS && TerrainGenerator.instance.addTrees && y < 13)
+                                {
+                                    if (x > 3 && z > 3 && x < CHUNK_SIZE - 3 && z < CHUNK_SIZE - 3)
                                     {
-                                        blocks[x, y, z] = BLOCK_STONE;
+                                        if (UnityEngine.Random.Range(0, 50) == 0)
+                                        {
+                                            AddTree(x, y + 1, z);
+                                        }
                                     }
                                 }
                             }

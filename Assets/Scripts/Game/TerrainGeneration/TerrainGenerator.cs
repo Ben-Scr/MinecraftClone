@@ -16,6 +16,29 @@ namespace BenScr.MCC
             public Vector2 offset;
         }
 
+        [Serializable]
+        public struct CaveNoiseSettings
+        {
+            [Min(0.0001f)] public float scale;
+            [Min(0.0001f)] public float verticalScale;
+            [Range(0f, 1f)] public float threshold;
+            public Vector3 offset;
+            [Min(0)] public int surfaceClearance;
+        }
+
+        [Header("Cave Noise")]
+        public bool enableCaves = true;
+
+        public CaveNoiseSettings caveNoise = new CaveNoiseSettings
+        {
+            scale = 48f,
+            verticalScale = 32f,
+            threshold = 0.6f,
+            offset = Vector3.zero,
+            surfaceClearance = 3
+        };
+
+
         [Header("Terrain Noise Layers")]
         public NoiseLayerSettings continentNoise = new NoiseLayerSettings
         {
@@ -95,12 +118,13 @@ namespace BenScr.MCC
         Vector2 mountainNoiseRuntimeOffset;
         Vector2 detailNoiseRuntimeOffset;
         Vector2 ridgeNoiseRuntimeOffset;
+        Vector3 caveNoiseRuntimeOffset;
 
         private void Awake()
         {
+            instance = this;
             chunks.Clear();
             chunkUpdateThresholdSq = chunkUpdateThreshold * chunkUpdateThreshold;
-            instance = this;
             UpdateViewDistance();
         }
 
@@ -108,17 +132,25 @@ namespace BenScr.MCC
         {
             UnityEngine.Random.InitState(seed);
 
-            continentNoiseRuntimeOffset = GenerateRuntimeOffset();
-            mountainNoiseRuntimeOffset = GenerateRuntimeOffset();
-            detailNoiseRuntimeOffset = GenerateRuntimeOffset();
-            ridgeNoiseRuntimeOffset = GenerateRuntimeOffset();
-
-            noiseOffset = new Vector2(UnityEngine.Random.Range(-100000f, 100000f), UnityEngine.Random.Range(-100000f, 100000f));
+            continentNoiseRuntimeOffset = GenerateOffset();
+            mountainNoiseRuntimeOffset = GenerateOffset();
+            detailNoiseRuntimeOffset = GenerateOffset();
+            ridgeNoiseRuntimeOffset = GenerateOffset();
+            noiseOffset = GenerateOffset();
+            caveNoiseRuntimeOffset = GenerateOffset3D();
         }
 
-        Vector2 GenerateRuntimeOffset()
+        private Vector2 GenerateOffset()
         {
             return new Vector2(
+                UnityEngine.Random.Range(-100_000f, 100_000f),
+                UnityEngine.Random.Range(-100_000f, 100_000f)
+            );
+        }
+        private Vector3 GenerateOffset3D()
+        {
+            return new Vector3(
+                UnityEngine.Random.Range(-100000f, 100000f),
                 UnityEngine.Random.Range(-100000f, 100000f),
                 UnityEngine.Random.Range(-100000f, 100000f)
             );
@@ -185,9 +217,8 @@ namespace BenScr.MCC
 
 
         public void UpdateChunks(Vector3 playerPosition)
-        {
-           // bool movedEnough = (playerPosition - lastChunkUpdatePlayerPosition).sqrMagnitude >= chunkUpdateThresholdSq;
-           bool movedEnough = true;
+        { 
+            bool movedEnough = (playerPosition - lastChunkUpdatePlayerPosition).sqrMagnitude >= chunkUpdateThresholdSq;
 
             if (!movedEnough && chunksToCreate.Count == 0 && chunksToGenerate.Count == 0)
                 return;
@@ -289,27 +320,35 @@ namespace BenScr.MCC
                    chunks.ContainsKey(chunkCoord + Vector3Int.down);
         }
 
-
-        public int GetTerrainHeight(int worldX, int worldZ)
+        internal bool ShouldCarveCave(float3 worldPosition, int groundLevel)
         {
-            float normalizedHeight = SampleTerrainHeight01(new float2(worldX, worldZ));
-            return Mathf.FloorToInt(normalizedHeight * noiseHeight) + groundOffset;
+            if (!enableCaves)
+                return false;
+
+            if (worldPosition.y >= groundLevel - caveNoise.surfaceClearance)
+                return false;
+
+            float noiseValue = SampleCaveNoise01(worldPosition);
+            return noiseValue > caveNoise.threshold;
         }
 
-        internal float SampleTerrainHeight01(float2 worldPosition)
+        internal float SampleCaveNoise01(float3 worldPosition)
         {
-            GetNoiseLayers(out var continentLayer, out var mountainLayer, out var detailLayer, out var ridgeLayer);
+            float horizontalFrequency = 1f / Mathf.Max(0.0001f, caveNoise.scale);
+            float verticalFrequency = 1f / Mathf.Max(0.0001f, caveNoise.verticalScale);
 
-            return TerrainNoiseUtility.SampleNormalizedHeight(
-                worldPosition,
-                continentLayer,
-                mountainLayer,
-                detailLayer,
-                ridgeLayer,
-                flatlandsHeightMultiplier,
-                mountainHeightMultiplier,
-                mountainBlendStart,
-                mountainBlendSharpness);
+            float sampleX = worldPosition.x + caveNoise.offset.x + caveNoiseRuntimeOffset.x + noiseOffset.x;
+            float sampleY = worldPosition.y + caveNoise.offset.y + caveNoiseRuntimeOffset.y;
+            float sampleZ = worldPosition.z + caveNoise.offset.z + caveNoiseRuntimeOffset.z + noiseOffset.y;
+
+            float3 sample = new float3(
+                sampleX * horizontalFrequency,
+                sampleY * verticalFrequency,
+                sampleZ * horizontalFrequency
+            );
+
+            float noiseValue = noise.snoise(sample);
+            return noiseValue * 0.5f + 0.5f;
         }
 
         internal void GetNoiseLayers(out NoiseLayer continentLayer, out NoiseLayer mountainLayer, out NoiseLayer detailLayer, out NoiseLayer ridgeLayer)
@@ -335,14 +374,13 @@ namespace BenScr.MCC
             };
         }
 
-
-        public void SetBlock(Vector3 position, int id)
+        public void SetBlock(Vector3 position, int blockId)
         {
             Chunk chunk = ChunkUtility.GetChunkByPosition(position);
 
             if (chunk != null)
             {
-                chunk.SetBlock(position - chunk.position, id);
+                chunk.SetBlock(position - chunk.position, blockId);
             }
             else
             {
