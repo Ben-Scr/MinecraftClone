@@ -23,6 +23,7 @@ namespace BenScr.MCC
         public const int BLOCK_WOOD = 4;
         public const int BLOCK_LEAVES = 5;
         public const int BLOCK_SNOW_GRASS = 8;
+        public const int BLOCK_WATER = 14;
 
         public byte[,,] blocks;
 
@@ -234,6 +235,8 @@ namespace BenScr.MCC
 
             public void Execute(int index)
             {
+                Pcg32 rng = new Pcg32(0, (ulong)index);
+
                 int x = index % ChunkSize;
                 int t = index / ChunkSize;
                 int y = t % ChunkHeight;
@@ -255,13 +258,19 @@ namespace BenScr.MCC
 
                 if (worldY > groundLevel)
                 {
-                    blockId = BLOCK_AIR;
+                    int waterLevel = GroundOffset + 8; // frei wählbarer Wert
+                    if (worldY <= waterLevel)
+                    {
+                        blockId = BLOCK_WATER;
+                    }
+                    else
+                        blockId = BLOCK_AIR;
                 }
                 else
                 {
                     if (worldY == groundLevel)
                     {
-                        blockId =  (byte)(groundLevel > 24 ? BLOCK_SNOW_GRASS: BLOCK_GRASS);
+                        blockId = (byte)(groundLevel >= 30 ? BLOCK_SNOW_GRASS : BLOCK_GRASS);
                     }
                     else if (worldY > groundLevel - 5)
                     {
@@ -317,7 +326,7 @@ namespace BenScr.MCC
             }
         }
 
-       
+
 
         private void AddTree(int x, int y, int z)
         {

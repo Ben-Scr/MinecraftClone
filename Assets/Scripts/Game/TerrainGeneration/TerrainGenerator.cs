@@ -130,6 +130,9 @@ namespace BenScr.MCC
 
         void Start()
         {
+            if (seed == 0)
+                seed = (int)DateTime.Now.Ticks;
+
             UnityEngine.Random.InitState(seed);
 
             continentNoiseRuntimeOffset = GenerateOffset();
