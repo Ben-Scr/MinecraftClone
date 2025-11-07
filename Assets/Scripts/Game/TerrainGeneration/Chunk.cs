@@ -214,76 +214,77 @@ namespace BenScr.MCC
 
             public void Execute(int index)
             {
-                int x = index / ChunkSize;
-                int z = index % ChunkSize;
+                int y = index % ChunkHeight;
+                int t = index / ChunkHeight;
+                int z = t % ChunkSize;
+                int x = t / ChunkSize;
 
-                int mapindex = z * CHUNK_SIZE + x;
-                float normalizedHeight = math.clamp(HeightMap[mapindex], 0f, 1f);
-                int groundLevel = (int)math.floor(normalizedHeight * TerrainGenerator.instance.noiseHeight) + TerrainGenerator.instance.groundOffset;
+                int heightMapIndex = z * ChunkSize + x;
+                float normalizedHeight = math.clamp(HeightMap[heightMapIndex], 0f, 1f);
+                int groundLevel = (int)math.floor(normalizedHeight * TerrainGenerator.instance.noiseHeight) + GroundOffset;
 
-                if (groundLevel < LowestGroundLevel)
-                    LowestGroundLevel = (short)groundLevel;
-                if (groundLevel > HighestGroundLevel)
-                    HighestGroundLevel = (short)groundLevel;
-
-                int worldX = ChunkCoordinate.x * CHUNK_SIZE + x;
-                int worldZ = ChunkCoordinate.z * CHUNK_SIZE + z;
-
-                for (int y = 0; y < CHUNK_HEIGHT; y++)
+                if (y == 0)
                 {
-                    if (Blocks[mapindex] != BLOCK_AIR)
+                    if (groundLevel < LowestGroundLevel)
+                        LowestGroundLevel = (short)groundLevel;
+                    if (groundLevel > HighestGroundLevel)
+                        HighestGroundLevel = (short)groundLevel;
+                }
+
+                int worldX = ChunkCoordinate.x * ChunkSize + x;
+                int worldY = ChunkCoordinate.y * ChunkHeight + y;
+                int worldZ = ChunkCoordinate.z * ChunkSize + z;
+
+                if (Blocks[index] != BLOCK_AIR)
+                {
+                    return;
+                }
+
+                byte blockId;
+
+                if (worldY > groundLevel)
+                {
+                    blockId = BLOCK_AIR;
+                }
+                else
+                {
+                    if (worldY == groundLevel)
                     {
-                        continue;
+                        blockId = BLOCK_GRASS;
                     }
-
-                    int worldY = ChunkCoordinate.y * CHUNK_HEIGHT + y;
-
-                    byte blockId;
-
-                    if (worldY > groundLevel)
+                    else if (worldY > groundLevel - 5)
                     {
-                        blockId = BLOCK_AIR;
+                        blockId = BLOCK_DIRT;
                     }
                     else
                     {
-                        if (worldY == groundLevel)
-                        {
-                            blockId = BLOCK_GRASS;
-                        }
-                        else if (worldY > groundLevel - 5)
-                        {
-                            blockId = BLOCK_DIRT;
-                        }
-                        else
-                        {
-                            blockId = BLOCK_STONE;
-                        }
-
-                        if (blockId != BLOCK_AIR)
-                        {
-                            float3 worldPosition = new float3(worldX, worldY, worldZ);
-                            if (TerrainGenerator.instance.ShouldCarveCave(worldPosition, groundLevel))
-                            {
-                                blockId = BLOCK_AIR;
-                            }
-                        }
+                        blockId = BLOCK_STONE;
                     }
-
-                    Blocks[mapindex] = blockId;
 
                     if (blockId != BLOCK_AIR)
                     {
-                        IsAirOnly = false;
-
-                        if (blockId == BLOCK_GRASS && TerrainGenerator.instance.addTrees && y < 13)
+                        float3 worldPosition = new float3(worldX, worldY, worldZ);
+                        if (TerrainGenerator.instance.ShouldCarveCave(worldPosition, groundLevel))
                         {
-                            if (x > 3 && z > 3 && x < CHUNK_SIZE - 3 && z < CHUNK_SIZE - 3)
-                            {
-                                if (UnityEngine.Random.Range(0, 50) == 0)
-                                {
-                                    AddTree(x, y + 1, z);
-                                }
-                            }
+                            blockId = BLOCK_AIR;
+                        }
+                    }
+                }
+
+                Blocks[index] = blockId;
+
+                if (blockId != BLOCK_AIR)
+                {
+                    IsAirOnly = false;
+
+                    if (blockId == BLOCK_GRASS && AddTrees && y < 13)
+                    {
+                        if (x > 3 && z > 3 && x < ChunkSize - 3 && z < ChunkSize - 3)
+                        {
+                         //   if (UnityEngine.Random.Range(0, 50) == 0)
+                          //  {
+                          //      AddTree(x, y + 1, z);
+                          //  }
                         }
                     }
                 }
