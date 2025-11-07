@@ -118,7 +118,7 @@ namespace BenScr.MCC
         Vector2 mountainNoiseRuntimeOffset;
         Vector2 detailNoiseRuntimeOffset;
         Vector2 ridgeNoiseRuntimeOffset;
-        Vector3 caveNoiseRuntimeOffset;
+       internal Vector3 caveNoiseRuntimeOffset;
 
         private void Awake()
         {

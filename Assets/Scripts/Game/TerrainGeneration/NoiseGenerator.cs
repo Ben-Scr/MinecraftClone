@@ -91,7 +91,7 @@ namespace BenScr.MCC
     public struct GenerateTerrainHeightMapJob : IJobParallelFor
     {
         [WriteOnly]
-        public NativeArray<float> HeightMap;
+        public NativeArray<int> HeightMap;
 
         [ReadOnly]
         public int ChunkSize;
@@ -123,6 +123,12 @@ namespace BenScr.MCC
         [ReadOnly]
         public float MountainBlendSharpness;
 
+        [ReadOnly]
+        public int GroundOffset;
+
+        [ReadOnly]
+        public float NoiseHeight;
+
         public void Execute(int index)
         {
             int x = index % ChunkSize;
@@ -141,7 +147,11 @@ namespace BenScr.MCC
                 MountainBlendStart,
                 MountainBlendSharpness);
 
-            HeightMap[index] = height;
+
+
+            //float normalizedHeight = math.clamp(height, 0f, 10000f);
+            int groundLevel = (int)math.floor(height * NoiseHeight) + GroundOffset;
+            HeightMap[index] = groundLevel;
         }
     }
 }

@@ -22,6 +22,7 @@ namespace BenScr.MCC
         public const int BLOCK_STONE = 3;
         public const int BLOCK_WOOD = 4;
         public const int BLOCK_LEAVES = 5;
+        public const int BLOCK_SNOW_GRASS = 8;
 
         public byte[,,] blocks;
 
@@ -104,8 +105,6 @@ namespace BenScr.MCC
             position = gameObject.transform.position;
 
             bool isAboveTopChunk = ChunkUtility.GetChunkByCoordinate(coordinate + Vector3Int.down)?.IsTop ?? false;
-            //  Chunk topChunk = ChunkUtility.GetChunkByCoordinate(coordinate + Vector3Int.up);
-            // bool requireChunkBelow = !isAboveTopChunk && (topChunk?.RequireChunkBelow ?? true);
 
             if (!isAboveTopChunk)
             {
@@ -115,22 +114,13 @@ namespace BenScr.MCC
             else
             {
                 blocks = new byte[CHUNK_SIZE, CHUNK_HEIGHT, CHUNK_SIZE];
-
-                //if (!isAboveTopChunk && !requireChunkBelow)
-                //{
-                //    for (int i = 0; i < CHUNK_SIZE; i++)
-                //        for (int j = 0; j < CHUNK_HEIGHT; j++)
-                //            for (int k = 0; k < CHUNK_SIZE; k++)
-                //                blocks[i, j, k] = BLOCK_STONE;
-                //}
-
                 isGenerated = true;
             }
         }
         private void PrepareCubes() // average sw time: 0 ms (max 1ms)
         {
             blocks = new byte[CHUNK_SIZE, CHUNK_HEIGHT, CHUNK_SIZE];
-            NativeArray<float> heightMap = new NativeArray<float>(CHUNK_SIZE * CHUNK_SIZE, Allocator.TempJob, NativeArrayOptions.UninitializedMemory);
+            NativeArray<int> heightMap = new NativeArray<int>(CHUNK_SIZE * CHUNK_SIZE, Allocator.TempJob, NativeArrayOptions.UninitializedMemory);
             NativeArray<byte> Blocks = new NativeArray<byte>(CHUNK_SIZE * CHUNK_HEIGHT * CHUNK_SIZE, Allocator.TempJob);
 
             try
@@ -149,7 +139,9 @@ namespace BenScr.MCC
                     FlatlandsHeightMultiplier = TerrainGenerator.instance.flatlandsHeightMultiplier,
                     MountainHeightMultiplier = TerrainGenerator.instance.mountainHeightMultiplier,
                     MountainBlendStart = TerrainGenerator.instance.mountainBlendStart,
-                    MountainBlendSharpness = TerrainGenerator.instance.mountainBlendSharpness
+                    MountainBlendSharpness = TerrainGenerator.instance.mountainBlendSharpness,
+                    NoiseHeight = TerrainGenerator.instance.noiseHeight,
+                    GroundOffset = TerrainGenerator.instance.groundOffset,
                 };
 
                 JobHandle heightHandle = heightJob.Schedule(heightMap.Length, 64);
@@ -163,27 +155,55 @@ namespace BenScr.MCC
                     ChunkHeight = CHUNK_HEIGHT,
                     GroundOffset = TerrainGenerator.instance.groundOffset,
                     HeightMap = heightMap,
-                    AddTrees = TerrainGenerator.instance.addTrees,
-                    LowestGroundLevel = lowestGroundLevel,
-                    HighestGroundLevel = highestGroundLevel,
-                    IsAirOnly = isAirOnly,
                     ChunkCoordinate = new int3(coordinate.x, coordinate.y, coordinate.z),
+                    caveNoise = TerrainGenerator.instance.caveNoise,
+                    enableCaves = TerrainGenerator.instance.enableCaves,
+                    noiseOffset = TerrainGenerator.instance.noiseOffset,
+                    caveNoiseRuntimeOffset = TerrainGenerator.instance.caveNoiseRuntimeOffset
                 };
 
                 JobHandle blockHandle = generateBlocksJob.Schedule(Blocks.Length, 64);
                 blockHandle.Complete();
 
-                lowestGroundLevel = generateBlocksJob.LowestGroundLevel;
-                highestGroundLevel = generateBlocksJob.HighestGroundLevel;
-                isAirOnly = generateBlocksJob.IsAirOnly;
-
                 for (int x = 0; x < CHUNK_SIZE; x++)
                     for (int y = 0; y < CHUNK_HEIGHT; y++)
                         for (int z = 0; z < CHUNK_SIZE; z++)
                         {
+                            int groundLevel = heightMap[x + z * CHUNK_SIZE];
+
+                            if (groundLevel < lowestGroundLevel)
+                                lowestGroundLevel = (short)groundLevel;
+                            if (groundLevel > highestGroundLevel)
+                                highestGroundLevel = (short)groundLevel;
+
                             int index = x + y * CHUNK_SIZE + z * CHUNK_SIZE * CHUNK_HEIGHT;
-                            blocks[x, y, z] = Blocks[index];
+                            byte block = Blocks[index];
+                            blocks[x, y, z] = block;
+
+                            if (isAirOnly && block != BLOCK_AIR)
+                                isAirOnly = false;
                         }
+
+                if (!isAirOnly && IsTop)
+                {
+                    for (int x = 0; x < CHUNK_SIZE; x++)
+                        for (int y = 0; y < CHUNK_HEIGHT; y++)
+                            for (int z = 0; z < CHUNK_SIZE; z++)
+                            {
+                                int groundLevel = heightMap[x + z * CHUNK_SIZE];
+
+                                if (groundLevel == (y - position.y) && TerrainGenerator.instance.addTrees && y < 13)
+                                {
+                                    if (x > 3 && z > 3 && x < CHUNK_SIZE - 3 && z < CHUNK_SIZE - 3)
+                                    {
+                                        if (UnityEngine.Random.Range(0, 50) == 0)
+                                        {
+                                            AddTree(x, y + 1, z);
+                                        }
+                                    }
+                                }
+                            }
+                }
             }
             finally
             {
@@ -202,34 +222,25 @@ namespace BenScr.MCC
         public struct GenerateBlocksJob : IJobParallelFor
         {
             public NativeArray<byte> Blocks;
-            [ReadOnly] public NativeArray<float> HeightMap;
+            [ReadOnly] public NativeArray<int> HeightMap;
             [ReadOnly] public int ChunkSize;
             [ReadOnly] public int ChunkHeight;
             [ReadOnly] public int GroundOffset;
             [ReadOnly] public int3 ChunkCoordinate;
-            [ReadOnly] public bool AddTrees;
-            public short LowestGroundLevel;
-            public short HighestGroundLevel;
-            public bool IsAirOnly;
+            [ReadOnly] public bool enableCaves;
+            [ReadOnly] public TerrainGenerator.CaveNoiseSettings caveNoise;
+            [ReadOnly] public float3 caveNoiseRuntimeOffset;
+            [ReadOnly] public float2 noiseOffset;
 
             public void Execute(int index)
             {
-                int y = index % ChunkHeight;
-                int t = index / ChunkHeight;
-                int z = t % ChunkSize;
-                int x = t / ChunkSize;
+                int x = index % ChunkSize;
+                int t = index / ChunkSize;
+                int y = t % ChunkHeight;
+                int z = t / ChunkHeight;
 
                 int heightMapIndex = z * ChunkSize + x;
-                float normalizedHeight = math.clamp(HeightMap[heightMapIndex], 0f, 1f);
-                int groundLevel = (int)math.floor(normalizedHeight * TerrainGenerator.instance.noiseHeight) + GroundOffset;
-
-                if (y == 0)
-                {
-                    if (groundLevel < LowestGroundLevel)
-                        LowestGroundLevel = (short)groundLevel;
-                    if (groundLevel > HighestGroundLevel)
-                        HighestGroundLevel = (short)groundLevel;
-                }
+                int groundLevel = HeightMap[heightMapIndex];
 
                 int worldX = ChunkCoordinate.x * ChunkSize + x;
                 int worldY = ChunkCoordinate.y * ChunkHeight + y;
@@ -250,7 +261,7 @@ namespace BenScr.MCC
                 {
                     if (worldY == groundLevel)
                     {
-                        blockId = BLOCK_GRASS;
+                        blockId =  (byte)(groundLevel > 24 ? BLOCK_SNOW_GRASS: BLOCK_GRASS);
                     }
                     else if (worldY > groundLevel - 5)
                     {
@@ -264,7 +275,7 @@ namespace BenScr.MCC
                     if (blockId != BLOCK_AIR)
                     {
                         float3 worldPosition = new float3(worldX, worldY, worldZ);
-                        if (TerrainGenerator.instance.ShouldCarveCave(worldPosition, groundLevel))
+                        if (ShouldCarveCave(worldPosition, groundLevel))
                         {
                             blockId = BLOCK_AIR;
                         }
@@ -272,63 +283,41 @@ namespace BenScr.MCC
                 }
 
                 Blocks[index] = blockId;
-
-                if (blockId != BLOCK_AIR)
-                {
-                    IsAirOnly = false;
-
-                    if (blockId == BLOCK_GRASS && AddTrees && y < 13)
-                    {
-                        if (x > 3 && z > 3 && x < ChunkSize - 3 && z < ChunkSize - 3)
-                        {
-                         //   if (UnityEngine.Random.Range(0, 50) == 0)
-                          //  {
-                          //      AddTree(x, y + 1, z);
-                          //  }
-                        }
-                    }
-                }
             }
 
-            private void AddTree(int x, int y, int z)
+            internal bool ShouldCarveCave(float3 worldPosition, int groundLevel)
             {
-                int height = UnityEngine.Random.Range(4, 7);
+                if (!enableCaves)
+                    return false;
 
-                for (int i = 0; i < height; i++)
-                {
-                    Vector3Int pos = new Vector3Int(x, y + i, z);
+                if (worldPosition.y >= groundLevel - caveNoise.surfaceClearance)
+                    return false;
 
-                    if (ChunkUtility.IsInsideChunk(pos))
-                    {
-                        int index = pos.x + pos.y * CHUNK_SIZE + pos.z * CHUNK_SIZE * CHUNK_HEIGHT;
-                        Blocks[index] = BLOCK_WOOD;
-                    }
-                }
+                float noiseValue = SampleCaveNoise01(worldPosition);
+                return noiseValue > caveNoise.threshold;
+            }
 
-                int treeHeadRadius = UnityEngine.Random.Range(4, 6);
+            internal float SampleCaveNoise01(float3 worldPosition)
+            {
+                float horizontalFrequency = 1f / Mathf.Max(0.0001f, caveNoise.scale);
+                float verticalFrequency = 1f / Mathf.Max(0.0001f, caveNoise.verticalScale);
 
-                for (int relativeX = -treeHeadRadius; relativeX < treeHeadRadius + 1; relativeX++)
-                {
-                    for (int relativeY = 0; relativeY < treeHeadRadius + 1; relativeY++)
-                    {
-                        for (int relativeZ = -treeHeadRadius; relativeZ < treeHeadRadius + 1; relativeZ++)
-                        {
-                            Vector3 center = new Vector3(x, y + height + treeHeadRadius / 8.0f, z);
-                            Vector3Int blockPos = new Vector3Int(x + relativeX, y + relativeY + height, z + relativeZ);
+                float sampleX = worldPosition.x + caveNoise.offset.x + caveNoiseRuntimeOffset.x + noiseOffset.x;
+                float sampleY = worldPosition.y + caveNoise.offset.y + caveNoiseRuntimeOffset.y;
+                float sampleZ = worldPosition.z + caveNoise.offset.z + caveNoiseRuntimeOffset.z + noiseOffset.y;
 
-                            if ((blockPos - center).magnitude < treeHeadRadius)
-                            {
-                                if (ChunkUtility.IsInsideChunk(blockPos))
-                                {
-                                    int index = blockPos.x + blockPos.y * CHUNK_SIZE + blockPos.z * CHUNK_SIZE * CHUNK_HEIGHT;
-                                    Blocks[index] = BLOCK_LEAVES;
-                                }
-                            }
-                        }
-                    }
-                }
+                float3 sample = new float3(
+                    sampleX * horizontalFrequency,
+                    sampleY * verticalFrequency,
+                    sampleZ * horizontalFrequency
+                );
+
+                float noiseValue = noise.snoise(sample);
+                return noiseValue * 0.5f + 0.5f;
             }
         }
+
+       
 
         private void AddTree(int x, int y, int z)
         {
