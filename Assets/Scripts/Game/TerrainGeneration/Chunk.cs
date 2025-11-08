@@ -128,7 +128,7 @@ namespace BenScr.MCC
                 isGenerated = true;
             }
         }
-        private void PrepareCubes() // average sw time: 0 ms (max 1ms)
+        private void PrepareCubes()
         {
             blocks = new byte[CHUNK_SIZE, CHUNK_HEIGHT, CHUNK_SIZE];
             NativeArray<int> heightMap = new NativeArray<int>(CHUNK_SIZE * CHUNK_SIZE, Allocator.TempJob, NativeArrayOptions.UninitializedMemory);
@@ -170,7 +170,8 @@ namespace BenScr.MCC
                     caveNoise = TerrainGenerator.instance.caveNoise,
                     enableCaves = TerrainGenerator.instance.enableCaves,
                     noiseOffset = TerrainGenerator.instance.noiseOffset,
-                    caveNoiseRuntimeOffset = TerrainGenerator.instance.caveNoiseRuntimeOffset
+                    caveNoiseRuntimeOffset = TerrainGenerator.instance.caveNoiseRuntimeOffset,
+                    waterLevel = TerrainGenerator.instance.waterLevel,
                 };
 
                 JobHandle blockHandle = generateBlocksJob.Schedule(Blocks.Length, 64);
@@ -203,7 +204,7 @@ namespace BenScr.MCC
                             {
                                 int groundLevel = heightMap[x + z * CHUNK_SIZE];
 
-                                if (groundLevel == (y - position.y) && TerrainGenerator.instance.addTrees && y < 13)
+                                if (groundLevel == (y - position.y) && TerrainGenerator.instance.addTrees && y + 13 <= CHUNK_HEIGHT)
                                 {
                                     if (x > 3 && z > 3 && x < CHUNK_SIZE - 3 && z < CHUNK_SIZE - 3)
                                     {
@@ -242,6 +243,7 @@ namespace BenScr.MCC
             [ReadOnly] public TerrainGenerator.CaveNoiseSettings caveNoise;
             [ReadOnly] public float3 caveNoiseRuntimeOffset;
             [ReadOnly] public float2 noiseOffset;
+            [ReadOnly] public int waterLevel;
 
             public void Execute(int index)
             {
@@ -268,7 +270,7 @@ namespace BenScr.MCC
 
                 if (worldY > groundLevel)
                 {
-                    int waterLevel = GroundOffset + 4; // frei wählbarer Wert
+                    int waterLevel = GroundOffset + this.waterLevel;
                     if (worldY <= waterLevel)
                     {
                         blockId = BLOCK_WATER;

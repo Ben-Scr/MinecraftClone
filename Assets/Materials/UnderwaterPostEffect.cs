@@ -81,7 +81,7 @@ namespace BenScr.MCC
                 player = GetComponentInParent<PlayerController>();
             }
 
-            bool isUnderwater = player != null && player.IsInFluid;
+            bool isUnderwater = player != null && player.IsHeadInFluid;
             float targetStrength = isUnderwater ? maxStrength : 0f;
             currentStrength = Mathf.MoveTowards(currentStrength, targetStrength, transitionSpeed * Time.deltaTime);
 

@@ -52,6 +52,7 @@ namespace BenScr.MCC
 
         private Rigidbody rb;
         private CapsuleCollider capsuleCollider;
+        private bool isHeadInFluid;
         private bool isInFluid;
         private Block currentFluidBlock;
         private float defaultDrag;
@@ -61,6 +62,8 @@ namespace BenScr.MCC
         public static PlayerController instance;
 
         public bool IsInFluid => isInFluid;
+        public bool IsHeadInFluid => isHeadInFluid;
+
         public Block CurrentFluidBlock => currentFluidBlock;
 
         private void Awake()
@@ -296,11 +299,14 @@ namespace BenScr.MCC
                 {
                     ExitFluid();
                 }
+
+                isHeadInFluid = false;
                 return;
             }
 
             bool wasInFluid = isInFluid;
             isInFluid = TryGetFluidBlock(out currentFluidBlock);
+            isHeadInFluid = CheckHeadInFluid();
 
             if (isInFluid)
             {
@@ -321,7 +327,39 @@ namespace BenScr.MCC
             rb.angularDamping = defaultAngularDrag;
             currentFluidBlock = null;
             isInFluid = false;
+            isHeadInFluid = false;
         }
+
+        private bool CheckHeadInFluid()
+        {
+            if (playerCamera != null)
+            {
+                return IsPositionInFluid(playerCamera.transform.position);
+            }
+
+            if (capsuleCollider != null)
+            {
+                Bounds bounds = capsuleCollider.bounds;
+                Vector3 headPosition = bounds.center + Vector3.up * bounds.extents.y;
+                return IsPositionInFluid(headPosition);
+            }
+
+            return false;
+        }
+
+        private static bool IsPositionInFluid(Vector3 position)
+        {
+            int blockId = ChunkUtility.GetBlockAtPosition(position);
+
+            if (blockId == Chunk.BLOCK_AIR)
+            {
+                return false;
+            }
+
+            Block block = AssetsContainer.GetBlock(blockId);
+            return block != null && block.isFluid;
+        }
+
 
         private bool TryGetFluidBlock(out Block fluidBlock)
         {

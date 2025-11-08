@@ -86,6 +86,7 @@ namespace BenScr.MCC
         [SerializeField] private int viewDistanceY = 2;
         public float noiseScale = 20.0f;
         public float noiseHeight = 10.0f;
+        public int waterLevel = 4;
         public int groundOffset = 10;
         internal Vector2 noiseOffset;
         [SerializeField] private float chunkUpdateThreshold = 1.0f;

@@ -25,7 +25,7 @@ Shader "BenScr/Fluid/Water"
     {
         Tags { "Queue"="Transparent" "RenderType"="Transparent" "IgnoreProjector"="True" }
         LOD 200
-        Cull Back
+        Cull Off
         ZWrite Off
         Blend SrcAlpha OneMinusSrcAlpha
 
@@ -125,13 +125,14 @@ Shader "BenScr/Fluid/Water"
                 return o;
             }
 
-            fixed4 frag(v2f i) : SV_Target
+            fixed4 frag(v2f i, fixed facing : VFACE) : SV_Target
             {
                 fixed4 baseSample   = tex2D(_MainTex, i.uv1);
                 fixed4 detailSample = tex2D(_MainTex, i.uv2);
                 fixed4 col = lerp(baseSample, detailSample, 0.5) * _Color;
 
                 float3 N = normalize(i.worldNormal);
+                if (facing < 0) N = -N;
                 float3 V = normalize(_WorldSpaceCameraPos - i.worldPos);
                 float fresnel = pow(saturate(1.0 - dot(V, N)), _FresnelPower);
 
