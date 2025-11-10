@@ -9,10 +9,9 @@ namespace BenScr.MCC
         [SerializeField] private float maxInteractionDistance = 5;
         [SerializeField] private GameObject highlightBlock;
 
-        Vector3 highlightPosition;
-        Vector3 placeBlockPosition;
-
-        bool highlightBlockVisible = false;
+        private Vector3 highlightPosition;
+        private Vector3 placeBlockPosition;
+        private bool highlightBlockVisible = false;
 
         [SerializeField] private float breakBlockCooldown = 0.1f;
         [SerializeField] private float placeBlockCooldown = 0.1f;
@@ -24,6 +23,15 @@ namespace BenScr.MCC
 
         void Update()
         {
+            if (PlayerController.instance.isSpectator)
+            {
+                breakBlockTimer = 0;
+                placeBlockTimer = 0;
+
+                highlightBlock.SetActive(false);
+                return;
+            }
+
             breakBlockTimer += Time.deltaTime;
             placeBlockTimer += Time.deltaTime;
 
@@ -72,7 +80,7 @@ namespace BenScr.MCC
                        );
 
                 int blockID = ChunkUtility.GetBlockAtPosition(highlightPosition);
-                if (blockID != Chunk.BLOCK_AIR)
+                if (blockID != Chunk.BLOCK_AIR && blockID != Chunk.BLOCK_WATER)
                 {
                     if (Input.GetKeyDown(KeyCode.E))
                     {

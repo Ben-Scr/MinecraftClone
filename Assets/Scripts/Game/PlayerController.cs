@@ -48,7 +48,7 @@ namespace BenScr.MCC
 
         private float curFlySpeedMultiplier = 1;
         private bool isFlying => movementMode == MovementMode.Flying;
-        private bool isSpectator => isFlying && !capsuleCollider.enabled;
+        public bool isSpectator => isFlying && !capsuleCollider.enabled;
 
         private Rigidbody rb;
         private CapsuleCollider capsuleCollider;
