@@ -24,4 +24,4 @@ A lightweight Minecraft-clone made with Unity and C#, featuring cubic chunk gene
 </p>
 
 ## Credits
-Texture Pack: PlanetMinecraft.com
+[Texture Pack](https://www.planetminecraft.com/texture-pack/echonilla-smooth-vanilla-32x/)
