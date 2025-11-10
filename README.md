@@ -1,5 +1,19 @@
-# MinecraftClone
-C# Unity Minecraft Clone
+# Simple C# Unity Minecraft Clone
+A lightweight Minecraft-clone made with Unity and C#, featuring cubic chunk generation — meaning there are no limits on the X, Y, or Z axis.
+
+
+## Terrain Generation
+- Caves
+- Mountains
+- Trees
+- Lakes
+
+## Controls
+- Move: `WASD`
+- Place Block: Right Mouse Button (0.1s interval)
+- Destroy Block: Left Mouse Button (0.1s interval)
+- Fly: Double-Tap `Space` (0.2s interval)
+- Toggle Spectator Mode: `F1`
 
 ## Gameplay Screenshots
 <p align="center">
@@ -8,3 +22,6 @@ C# Unity Minecraft Clone
   <img src="Docs/Screenshot3.png" width="45%" alt="Gameplay Screenshot 3">
   <img src="Docs/Screenshot6.png" width="45%" alt="Gameplay Screenshot 4">
 </p>
+
+## Credits
+Texture Pack: PlanetMinecraft.com
