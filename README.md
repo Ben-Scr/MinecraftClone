@@ -1,5 +1,5 @@
 # Simple C# Unity Minecraft Clone
-A lightweight Minecraft-clone made with Unity and C#, featuring cubic chunk generation — meaning there are no limits on the X, Y, or Z axis.
+A lightweight Minecraft Clone made with Unity and C#, featuring cubic chunk generation, meaning there are no limits on the X, Y, or Z axis.
 
 
 ## Terrain Generation
