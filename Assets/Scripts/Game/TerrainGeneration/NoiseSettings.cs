@@ -92,6 +92,10 @@ namespace BenScr.MinecraftClone
         private Vector2 ridgeNoiseRuntimeOffset;
         internal Vector3 caveNoiseRuntimeOffset;
 
+        // Cached noise layers to avoid re-creating structs per chunk
+        private NoiseLayer cachedContinent, cachedMountain, cachedDetail, cachedRidge;
+        private bool layersCached;
+
         public static NoiseSettings instance;
 
         private void Awake()
@@ -112,6 +116,17 @@ namespace BenScr.MinecraftClone
             ridgeNoiseRuntimeOffset = GenerateOffset2D();
             noiseOffset = GenerateOffset2D();
             caveNoiseRuntimeOffset = GenerateOffset3D();
+
+            CacheLayers();
+        }
+
+        private void CacheLayers()
+        {
+            cachedContinent = CreateNoiseLayer(continentNoise, continentNoiseRuntimeOffset);
+            cachedMountain = CreateNoiseLayer(mountainNoise, mountainNoiseRuntimeOffset);
+            cachedDetail = CreateNoiseLayer(detailNoise, detailNoiseRuntimeOffset);
+            cachedRidge = CreateNoiseLayer(ridgeNoise, ridgeNoiseRuntimeOffset);
+            layersCached = true;
         }
 
 
@@ -134,10 +149,11 @@ namespace BenScr.MinecraftClone
 
         public void GetNoiseLayers(out NoiseLayer continentLayer, out NoiseLayer mountainLayer, out NoiseLayer detailLayer, out NoiseLayer ridgeLayer)
         {
-            continentLayer = CreateNoiseLayer(continentNoise, continentNoiseRuntimeOffset);
-            mountainLayer = CreateNoiseLayer(mountainNoise, mountainNoiseRuntimeOffset);
-            detailLayer = CreateNoiseLayer(detailNoise, detailNoiseRuntimeOffset);
-            ridgeLayer = CreateNoiseLayer(ridgeNoise, ridgeNoiseRuntimeOffset);
+            if (!layersCached) CacheLayers();
+            continentLayer = cachedContinent;
+            mountainLayer = cachedMountain;
+            detailLayer = cachedDetail;
+            ridgeLayer = cachedRidge;
         }
 
         NoiseLayer CreateNoiseLayer(NoiseLayerSettings settings, Vector2 runtimeOffset)

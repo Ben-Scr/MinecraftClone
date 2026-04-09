@@ -59,12 +59,19 @@ namespace BenScr.MinecraftClone
 
             BlockData[] blockDefinitions = AssetsContainer.instance.blocks;
 
+            // Allocate mask/stamp once and reuse across all 6 face directions
+            int maxMaskSize = Chunk.CHUNK_SIZE * Chunk.CHUNK_HEIGHT;
+            GreedyCell[] sharedMask = new GreedyCell[maxMaskSize];
+            int[] sharedUsedStamp = new int[maxMaskSize];
+
             for (int face = 0; face < 6; face++)
             {
                 BuildGreedyFacesForDirection(
                     haloBlocks,
                     blockDefinitions,
                     face,
+                    sharedMask,
+                    sharedUsedStamp,
                     solidVertices,
                     solidNormals,
                     solidTriangles,
@@ -89,6 +96,8 @@ namespace BenScr.MinecraftClone
                    byte[,,] haloBlocks,
                    BlockData[] blockDefinitions,
                    int face,
+                   GreedyCell[] mask,
+                   int[] usedStamp,
                    List<Vector3> solidVertices,
                    List<Vector3> solidNormals,
                    List<int> solidTriangles,
@@ -103,8 +112,8 @@ namespace BenScr.MinecraftClone
                    List<Vector2> transparentUvs)
         {
             GetMaskSizeForFace(face, out int width, out int height, out int slices);
-            GreedyCell[] mask = new GreedyCell[width * height];
-            int[] usedStamp = new int[width * height];
+            // Reset stamp counter per face direction; arrays are reused
+            Array.Clear(usedStamp, 0, width * height);
             int stamp = 1;
 
             for (int slice = 0; slice < slices; slice++)

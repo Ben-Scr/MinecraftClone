@@ -229,6 +229,7 @@ namespace BenScr.MinecraftClone
                 heightHandle.Complete();
 
 
+                var cave = NoiseSettings.instance.caveNoise;
                 GenerateBlocksJob generateBlocksJob = new GenerateBlocksJob
                 {
                     blocks = Blocks,
@@ -237,27 +238,31 @@ namespace BenScr.MinecraftClone
                     groundOffset = NoiseSettings.instance.groundOffset,
                     heightMap = heightMap,
                     chunkCoordinate = new int3(coordinate.x, coordinate.y, coordinate.z),
-                    caveNoise = NoiseSettings.instance.caveNoise,
+                    caveNoise = cave,
                     enableCaves = NoiseSettings.instance.enableCaves,
                     noiseOffset = NoiseSettings.instance.noiseOffset,
                     caveNoiseRuntimeOffset = NoiseSettings.instance.caveNoiseRuntimeOffset,
                     waterLevel = NoiseSettings.instance.waterLevel,
+                    caveHorizontalFrequency = 1f / Mathf.Max(0.0001f, cave.scale),
+                    caveVerticalFrequency = 1f / Mathf.Max(0.0001f, cave.verticalScale),
                 };
 
                 JobHandle blockHandle = generateBlocksJob.Schedule(Blocks.Length, 64);
                 blockHandle.Complete();
 
-                for (int x = 0; x < CHUNK_SIZE; x++)
+                // Compute min/max ground level from height map (1024 iterations instead of 32768)
+                for (int i = 0; i < CHUNK_SIZE * CHUNK_SIZE; i++)
+                {
+                    int gl = heightMap[i];
+                    if (gl < lowestGroundLevel) lowestGroundLevel = (short)gl;
+                    if (gl > highestGroundLevel) highestGroundLevel = (short)gl;
+                }
+
+                // Copy blocks from flat NativeArray to 3D array
+                for (int z = 0; z < CHUNK_SIZE; z++)
                     for (int y = 0; y < CHUNK_HEIGHT; y++)
-                        for (int z = 0; z < CHUNK_SIZE; z++)
+                        for (int x = 0; x < CHUNK_SIZE; x++)
                         {
-                            int groundLevel = heightMap[x + z * CHUNK_SIZE];
-
-                            if (groundLevel < lowestGroundLevel)
-                                lowestGroundLevel = (short)groundLevel;
-                            if (groundLevel > highestGroundLevel)
-                                highestGroundLevel = (short)groundLevel;
-
                             int index = x + y * CHUNK_SIZE + z * CHUNK_SIZE * CHUNK_HEIGHT;
                             byte block = Blocks[index];
                             blocks[x, y, z] = block;
@@ -318,6 +323,8 @@ namespace BenScr.MinecraftClone
             }
 
             int treeHeadRadius = UnityEngine.Random.Range(4, 6);
+            Vector3 center = new Vector3(x, y + height + treeHeadRadius / 8.0f, z);
+            float radiusSq = treeHeadRadius * treeHeadRadius;
 
             for (int relativeX = -treeHeadRadius; relativeX < treeHeadRadius + 1; relativeX++)
             {
@@ -325,10 +332,9 @@ namespace BenScr.MinecraftClone
                 {
                     for (int relativeZ = -treeHeadRadius; relativeZ < treeHeadRadius + 1; relativeZ++)
                     {
-                        Vector3 center = new Vector3(x, y + height + treeHeadRadius / 8.0f, z);
                         Vector3Int blockPos = new Vector3Int(x + relativeX, y + relativeY + height, z + relativeZ);
 
-                        if ((blockPos - center).magnitude < treeHeadRadius)
+                        if (((Vector3)blockPos - center).sqrMagnitude < radiusSq)
                         {
                             if (ChunkUtility.IsInsideChunk(blockPos))
                                 blocks[blockPos.x, blockPos.y, blockPos.z] = BLOCK_LEAVES;
@@ -479,32 +485,6 @@ namespace BenScr.MinecraftClone
                 }
             }
 
-            int maxX = SX + 1;
-            int maxY = SY + 1;
-            int maxZ = SZ + 1;
-
-            for (int x = 0; x <= maxX; x++)
-            {
-                int worldX = originX + x - 1;
-                bool boundaryX = x == 0 || x == maxX;
-                for (int y = 0; y <= maxY; y++)
-                {
-                    int worldY = originY + y - 1;
-                    bool boundaryY = y == 0 || y == maxY;
-                    for (int z = 0; z <= maxZ; z++)
-                    {
-                        bool boundaryZ = z == 0 || z == maxZ;
-                        int boundaryCount = (boundaryX ? 1 : 0) + (boundaryY ? 1 : 0) + (boundaryZ ? 1 : 0);
-
-                        if (boundaryCount >= 2)
-                        {
-                            int worldZ = originZ + z - 1;
-                            halo[x, y, z] = (byte)ChunkUtility.GetBlockAtPosition(new Vector3Int(worldX, worldY, worldZ));
-                        }
-                    }
-                }
-            }
-
             FillHaloEdgesAndCorners(halo, originX, originY, originZ);
 
             return halo;
@@ -630,10 +610,12 @@ namespace BenScr.MinecraftClone
             [ReadOnly] public float2 noiseOffset;
             [ReadOnly] public int waterLevel;
 
+            // Pre-computed cave frequencies to avoid per-voxel division
+            [ReadOnly] public float caveHorizontalFrequency;
+            [ReadOnly] public float caveVerticalFrequency;
+
             public void Execute(int index)
             {
-                Pcg32 rng = new Pcg32(0, (ulong)index);
-
                 int x = index % chunkSize;
                 int t = index / chunkSize;
                 int y = t % chunkHeight;
@@ -705,17 +687,14 @@ namespace BenScr.MinecraftClone
 
             internal float SampleCaveNoise01(float3 worldPosition)
             {
-                float horizontalFrequency = 1f / Mathf.Max(0.0001f, caveNoise.scale);
-                float verticalFrequency = 1f / Mathf.Max(0.0001f, caveNoise.verticalScale);
-
                 float sampleX = worldPosition.x + caveNoise.offset.x + caveNoiseRuntimeOffset.x + noiseOffset.x;
                 float sampleY = worldPosition.y + caveNoise.offset.y + caveNoiseRuntimeOffset.y;
                 float sampleZ = worldPosition.z + caveNoise.offset.z + caveNoiseRuntimeOffset.z + noiseOffset.y;
 
                 float3 sample = new float3(
-                    sampleX * horizontalFrequency,
-                    sampleY * verticalFrequency,
-                    sampleZ * horizontalFrequency
+                    sampleX * caveHorizontalFrequency,
+                    sampleY * caveVerticalFrequency,
+                    sampleZ * caveHorizontalFrequency
                 );
 
                 float noiseValue = noise.snoise(sample);
