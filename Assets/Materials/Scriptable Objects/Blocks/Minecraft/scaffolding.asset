@@ -1,0 +1,73 @@
+%YAML 1.1
+%TAG !u! tag:unity3d.com,2011:
+--- !u!114 &11400000
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 0}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: d6643304ec9e5f042898ecbe8f2c137b, type: 3}
+  m_Name: scaffolding
+  m_EditorClassIdentifier: Assembly-CSharp::Block
+  Durability: 2
+  IsIndestructible: 0
+  IsTransparent: 1
+  IsFluid: 0
+  FallsWhenUnsupported: 1
+  RenderType: 0
+  IsFullBlock: 0
+  RotateOnPlace: 0
+  GenerateModelCollider: 1
+  ModelPrefab: {fileID: 0}
+  ModelMaterialOverride: {fileID: 0}
+  ModelPositionOffset: {x: 0, y: 0, z: 0}
+  ModelRotationOffset: {x: 0, y: 0, z: 0}
+  ModelScale: {x: 1, y: 1, z: 1}
+  ItemData: {fileID: 11400000, guid: a4940a4e01539144b5580de6d7762367, type: 2}
+  DestroyEffect: {fileID: 0}
+  faceTextures:
+    Back:
+      Texture: {fileID: 21300000, guid: c9b949d2b385bb7986e761e4acec3503, type: 3}
+      OverlayTexture: {fileID: 0}
+      UvMin: {x: 0, y: 0}
+      UvMax: {x: 1, y: 1}
+      TextureLayer: 78
+      OverlayTextureLayer: 0
+    Front:
+      Texture: {fileID: 21300000, guid: c9b949d2b385bb7986e761e4acec3503, type: 3}
+      OverlayTexture: {fileID: 0}
+      UvMin: {x: 0, y: 0}
+      UvMax: {x: 1, y: 1}
+      TextureLayer: 78
+      OverlayTextureLayer: 0
+    Top:
+      Texture: {fileID: 21300000, guid: fa7d891119ddd7f6a455c61e5f1e29e1, type: 3}
+      OverlayTexture: {fileID: 0}
+      UvMin: {x: 0, y: 0}
+      UvMax: {x: 1, y: 1}
+      TextureLayer: 79
+      OverlayTextureLayer: 0
+    Bottom:
+      Texture: {fileID: 21300000, guid: 0fc24d5be68841c383ed5f4f9020e95e, type: 3}
+      OverlayTexture: {fileID: 0}
+      UvMin: {x: 0, y: 0}
+      UvMax: {x: 1, y: 1}
+      TextureLayer: 80
+      OverlayTextureLayer: 0
+    Left:
+      Texture: {fileID: 21300000, guid: c9b949d2b385bb7986e761e4acec3503, type: 3}
+      OverlayTexture: {fileID: 0}
+      UvMin: {x: 0, y: 0}
+      UvMax: {x: 1, y: 1}
+      TextureLayer: 78
+      OverlayTextureLayer: 0
+    Right:
+      Texture: {fileID: 21300000, guid: c9b949d2b385bb7986e761e4acec3503, type: 3}
+      OverlayTexture: {fileID: 0}
+      UvMin: {x: 0, y: 0}
+      UvMax: {x: 1, y: 1}
+      TextureLayer: 78
+      OverlayTextureLayer: 0

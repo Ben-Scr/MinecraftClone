@@ -1,0 +1,55 @@
+%YAML 1.1
+%TAG !u! tag:unity3d.com,2011:
+--- !u!114 &11400000
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 0}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: d6643304ec9e5f042898ecbe8f2c137b, type: 3}
+  m_Name: farmland_moist
+  m_EditorClassIdentifier: Assembly-CSharp::Block
+  Durability: 3
+  IsIndestructible: 0
+  IsTransparent: 0
+  IsFluid: 0
+  FallsWhenUnsupported: 1
+  RenderType: 0
+  IsFullBlock: 1
+  RotateOnPlace: 0
+  GenerateModelCollider: 1
+  ModelPrefab: {fileID: 0}
+  ModelMaterialOverride: {fileID: 0}
+  ModelPositionOffset: {x: 0, y: 0, z: 0}
+  ModelRotationOffset: {x: 0, y: 0, z: 0}
+  ModelScale: {x: 1, y: 1, z: 1}
+  ItemData: {fileID: 11400000, guid: 5655d1dc770dd23c2092f5a2e6b915d5, type: 2}
+  DestroyEffect: {fileID: 0}
+  faceTextures:
+    Back:
+      Texture: {fileID: 21300000, guid: 254f9018edec655bba6f4cdaccf9ed22, type: 3}
+      UvMin: {x: 0, y: 0}
+      UvMax: {x: 1, y: 1}
+    Front:
+      Texture: {fileID: 21300000, guid: 254f9018edec655bba6f4cdaccf9ed22, type: 3}
+      UvMin: {x: 0, y: 0}
+      UvMax: {x: 1, y: 1}
+    Top:
+      Texture: {fileID: 21300000, guid: 254f9018edec655bba6f4cdaccf9ed22, type: 3}
+      UvMin: {x: 0, y: 0}
+      UvMax: {x: 1, y: 1}
+    Bottom:
+      Texture: {fileID: 21300000, guid: 254f9018edec655bba6f4cdaccf9ed22, type: 3}
+      UvMin: {x: 0, y: 0}
+      UvMax: {x: 1, y: 1}
+    Left:
+      Texture: {fileID: 21300000, guid: 254f9018edec655bba6f4cdaccf9ed22, type: 3}
+      UvMin: {x: 0, y: 0}
+      UvMax: {x: 1, y: 1}
+    Right:
+      Texture: {fileID: 21300000, guid: 254f9018edec655bba6f4cdaccf9ed22, type: 3}
+      UvMin: {x: 0, y: 0}
+      UvMax: {x: 1, y: 1}

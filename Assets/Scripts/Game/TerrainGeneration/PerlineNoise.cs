@@ -41,18 +41,18 @@ namespace BenScr.MinecraftClone
         222,114, 67,29,24,72,243,141,128,195,78,66,215,61,156,180
         };
 
-        private struct Gradient2D { public float x, y; }
+        private struct Gradient2D { public float X, Y; }
 
         private static readonly Gradient2D[] Gradients = new Gradient2D[]
         {
-        new Gradient2D { x =  1, y =  1 },
-        new Gradient2D { x = -1, y =  1 },
-        new Gradient2D { x =  1, y = -1 },
-        new Gradient2D { x = -1, y = -1 },
-        new Gradient2D { x =  1, y =  0 },
-        new Gradient2D { x = -1, y =  0 },
-        new Gradient2D { x =  0, y =  1 },
-        new Gradient2D { x =  0, y = -1 },
+        new Gradient2D { X =  1, Y =  1 },
+        new Gradient2D { X = -1, Y =  1 },
+        new Gradient2D { X =  1, Y = -1 },
+        new Gradient2D { X = -1, Y = -1 },
+        new Gradient2D { X =  1, Y =  0 },
+        new Gradient2D { X = -1, Y =  0 },
+        new Gradient2D { X =  0, Y =  1 },
+        new Gradient2D { X =  0, Y = -1 },
         };
 
         private static float Fade(float t) => t * t * t * (t * (t * 6 - 15) + 10);
@@ -62,7 +62,7 @@ namespace BenScr.MinecraftClone
         private static float Grad(int hash, float x, float y)
         {
             Gradient2D g = Gradients[hash & 7];
-            return g.x * x + g.y * y;
+            return g.X * x + g.Y * y;
         }
 
         public static float Perlin2D(float x, float y)

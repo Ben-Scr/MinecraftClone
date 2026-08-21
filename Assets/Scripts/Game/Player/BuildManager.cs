@@ -16,11 +16,21 @@ namespace BenScr.MinecraftClone
         [SerializeField] private float breakBlockCooldown = 0.1f;
         [SerializeField] private float placeBlockCooldown = 0.1f;
 
+        [Header("TNT")]
+        [SerializeField, Min(0.05f)] private float tntFuseSeconds = 3f;
+        [SerializeField, Min(0.1f)] private float tntDestructionRadius = 4f;
+        [SerializeField, Min(1)] private int tntMaxDestroyedBlocks = 512;
+        [SerializeField] private bool tntDestroyFluids;
+        [SerializeField] private bool tntDestroyIndestructibleBlocks;
+        [SerializeField] private bool tntDropDestroyedBlocks;
+        [SerializeField] private bool tntPrimeNearbyTnt = true;
+        [SerializeField, Min(0.05f)] private float tntChainedFuseSeconds = 1.2f;
+
         private Slot selectedBlockItemSlot;
         private BlockData GetSelectedBlock()
         {
-            BlockItemData blockItemData = (BlockItemData)selectedBlockItemSlot?.item.itemData;
-            return blockItemData.block;
+            BlockItemData blockItemData = (BlockItemData)selectedBlockItemSlot?.Item.ItemData;
+            return blockItemData?.Block;
         }
 
         private Vector3 highlightPosition;
@@ -51,30 +61,32 @@ namespace BenScr.MinecraftClone
             TerrainUtility.OnDestroyBlock -= OnDestroyBlock;
         }
 
-        private void OnDestroyBlock(BlockData blockData)
+        private void OnDestroyBlock(BlockData blockData, Vector3 position)
         {
-            if (blockData.itemData)
+            if (blockData.ItemData)
             {
-                InventoryManager.AddItem(blockData.itemData, 1);
+                Vector3 dropPosition = position + Vector3.one * 0.5f;
+                if (!DroppedItemManager.TryDropAt(blockData.ItemData, 1, blockData.ItemData.MaxDuration, dropPosition))
+                    Debug.LogWarning("Failed to drop item: " + blockData.ItemData.name);
             }
 
-            Debug.Log("Destroyed Block: " + blockData?.itemData?.name ?? "null");
+            Debug.Log("Destroyed Block: " + (blockData?.ItemData?.name ?? "null") + " at: " + position);
         }
 
         private void Update()
         {
-            if (!PlayerController.instance || GameController.IsFrozen || !isActive) return;
+            if (!PlayerController.Instance || GameController.IsFrozen || !isActive) return;
 
             breakBlockTimer += Time.deltaTime;
             placeBlockTimer += Time.deltaTime;
 
             if (blockInRange)
             {
-                if ((PlayerController.instance.isFlying ? Input.GetMouseButton(0) : Input.GetMouseButtonDown(0)) && breakBlockTimer > breakBlockCooldown)
+                if ((PlayerController.Instance.IsFlying ? Input.GetMouseButton(0) : Input.GetMouseButtonDown(0)) && breakBlockTimer > breakBlockCooldown)
                 {
                     breakBlockTimer = 0f;
 
-                    if (PlayerController.instance.gameMode == GameMode.Creative)
+                    if (PlayerController.Instance.GameMode == GameMode.Creative)
                         TerrainUtility.DestroyBlock(highlightPosition);
                     else
                         TerrainUtility.DamageBlock(highlightPosition, 1);
@@ -83,18 +95,89 @@ namespace BenScr.MinecraftClone
                 if (Input.GetMouseButton(1) && placeBlockTimer > placeBlockCooldown)
                 {
                     placeBlockTimer = 0f;
-                    Vector3 center = placeBlockPosition + new Vector3(0.5f, 0.5f, 0.5f);
-                    bool overlapsWithPlayer = Physics.CheckBox(center, halfExtents, Quaternion.identity, LayerMask.GetMask("Player"));
 
-                    if (!overlapsWithPlayer && selectedBlockItemSlot != null)
+                    if (!TryPrimeHighlightedTnt())
                     {
-                        TerrainUtility.SetBlock(placeBlockPosition, GetSelectedBlock().id);
-                        InventoryManager.RemoveItem(selectedBlockItemSlot, 1);
+                        BlockData selectedBlock = GetSelectedBlock();
+                        if (selectedBlock != null && CanPlaceBlockAt(placeBlockPosition))
+                        {
+                            TerrainUtility.SetBlock(
+                                placeBlockPosition,
+                                selectedBlock.id,
+                                GetPlacementRotationY(selectedBlock));
+
+                            if (PlayerController.Instance.GameMode != GameMode.Creative)
+                                InventoryManager.RemoveItem(selectedBlockItemSlot, 1);
+                        }
                     }
                 }
             }
 
             UpdateHighlightBlock();
+        }
+
+        private bool TryPrimeHighlightedTnt()
+        {
+            Vector3Int blockPosition = ChunkUtility.SnapPosition(highlightPosition);
+            if (ChunkUtility.GetBlockAtPosition(blockPosition) != Chunk.BLOCK_TNT)
+                return false;
+
+            return FallingBlockSimulator.TryPrimeTntBlock(blockPosition, CreateTntExplosionSettings());
+        }
+
+        private FallingBlockSimulator.TntExplosionSettings CreateTntExplosionSettings()
+        {
+            return new FallingBlockSimulator.TntExplosionSettings
+            {
+                FuseSeconds = tntFuseSeconds,
+                DestructionRadius = tntDestructionRadius,
+                MaxDestroyedBlocks = tntMaxDestroyedBlocks,
+                DestroyFluids = tntDestroyFluids,
+                DestroyIndestructibleBlocks = tntDestroyIndestructibleBlocks,
+                DropDestroyedBlocks = tntDropDestroyedBlocks,
+                PrimeNearbyTnt = tntPrimeNearbyTnt,
+                ChainedFuseSeconds = tntChainedFuseSeconds
+            };
+        }
+
+        private int GetPlacementRotationY(BlockData block)
+        {
+            if (block == null || !block.RotateOnPlace || Camera.main == null)
+                return 0;
+
+            Vector3 forward = Camera.main.transform.forward;
+            forward.y = 0f;
+
+            if (forward.sqrMagnitude < 0.0001f)
+                return 0;
+
+            forward.Normalize();
+
+            if (Mathf.Abs(forward.x) > Mathf.Abs(forward.z))
+                return forward.x >= 0f ? 90 : 270;
+
+            return forward.z >= 0f ? 0 : 180;
+        }
+
+        private static bool CanPlaceBlockAt(Vector3 worldPosition)
+        {
+            Vector3Int blockPosition = ChunkUtility.SnapPosition(worldPosition);
+
+            if (FallingBlockSimulator.IsWorldPositionBlockedByFallingEntity(blockPosition))
+                return false;
+
+            int existingBlockId = ChunkUtility.GetBlockAtPosition(blockPosition);
+            BlockData existingBlock = AssetsContainer.GetBlock(existingBlockId);
+            if (existingBlockId != Chunk.BLOCK_AIR && (existingBlock == null || !existingBlock.IsFluid))
+                return false;
+
+            Vector3 center = (Vector3)blockPosition + Vector3.one * 0.5f;
+            return !Physics.CheckBox(
+                center,
+                halfExtents,
+                Quaternion.identity,
+                LayerMask.GetMask("Player"),
+                QueryTriggerInteraction.Ignore);
         }
 
         private void UpdateHighlightBlock()
@@ -134,8 +217,9 @@ namespace BenScr.MinecraftClone
             while (traveled <= maxInteractionDistance)
             {
                 int blockID = ChunkUtility.GetBlockAtPosition(current);
+                BlockData block = AssetsContainer.GetBlock(blockID);
 
-                if (blockID != Chunk.BLOCK_AIR && blockID != Chunk.BLOCK_WATER)
+                if (blockID != Chunk.BLOCK_AIR && block != null && !block.IsFluid)
                 {
                     highlightPosition = current;
                     placeBlockPosition = current + hitNormal;
@@ -149,10 +233,10 @@ namespace BenScr.MinecraftClone
                     {
                         Chunk chunk = ChunkUtility.GetChunkAtPosition(current);
                         Debug.Log("Highlighted block: " + AssetsContainer.GetBlock(blockID).name);
-                        Debug.Log("In Chunk at position " + chunk.coordinate + " AirOnly:" + chunk.isAirOnly
-                            + " HighestGroundlevel:" + chunk.highestGroundLevel + " LowestGroundlevel:"
-                            + chunk.lowestGroundLevel + " IsTop:" + chunk.IsTop
-                            + " IsGenerated:" + chunk.isGenerated);
+                        Debug.Log("In Chunk at position " + chunk.Coordinate + " AirOnly:" + chunk.IsAirOnly
+                            + " HighestGroundlevel:" + chunk.HighestGroundLevel + " LowestGroundlevel:"
+                            + chunk.LowestGroundLevel + " IsTop:" + chunk.IsTop
+                            + " IsGenerated:" + chunk.IsGenerated);
                     }
 
                     return;
@@ -202,7 +286,7 @@ namespace BenScr.MinecraftClone
 
         private void OnSwitchSlot(Slot slot)
         {
-            if (slot?.item?.itemData is BlockItemData)
+            if (slot?.Item?.ItemData is BlockItemData)
             {
                 isActive = true;
                 selectedBlockItemSlot = slot;

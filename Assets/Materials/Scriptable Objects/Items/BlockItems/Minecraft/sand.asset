@@ -1,0 +1,30 @@
+%YAML 1.1
+%TAG !u! tag:unity3d.com,2011:
+--- !u!114 &11400000
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 0}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: e4eca37301cc3614aa6dbb6a555bb865, type: 3}
+  m_Name: sand
+  m_EditorClassIdentifier: Assembly-CSharp::BenScr.MinecraftClone.BlockItemData
+  Id: 0
+  Sprite: {fileID: 21300000, guid: 6f523a86064649d28c4c87a148e291ea, type: 3}
+  StackSize: 64
+  _name: sand
+  Description: 
+  Type: 0
+  Durable: 0
+  MaxDuration: 0
+  Offset: {x: 0, y: 0}
+  Size: {x: 0.55, y: 0.55}
+  Rotation: {x: 0, y: 0, z: 0}
+  Hand: 0
+  PrizeData:
+    PrizeItems: []
+    PrizeAmounts: 
+  Block: {fileID: 11400000, guid: b35431a0e70c6634bb18fd496862f9da, type: 2}

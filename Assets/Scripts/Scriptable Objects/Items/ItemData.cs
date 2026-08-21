@@ -1,5 +1,6 @@
 using System;
 using UnityEngine;
+using UnityEngine.Serialization;
 
 namespace BenScr.MinecraftClone
 {
@@ -8,29 +9,41 @@ namespace BenScr.MinecraftClone
     {
         [Header("General")]
 
-        public int id;
-        public Sprite sprite;
-        public ushort stackSize = 16;
+        [FormerlySerializedAs("id")]
+        public int Id;
+        [FormerlySerializedAs("sprite")]
+        public Sprite Sprite;
+        [FormerlySerializedAs("stackSize")]
+        public ushort StackSize = 16;
         [SerializeField] internal string _name;
         public string Name => _name;
         internal string NameEnglish;
 
-        public string description;
-        public ItemType type = ItemType.None;
+        [FormerlySerializedAs("description")]
+        public string Description;
+        [FormerlySerializedAs("type")]
+        public ItemType Type = ItemType.None;
 
         [Header("Duration")]
-        public bool durable;
-        public int maxDuration;
+        [FormerlySerializedAs("durable")]
+        public bool Durable;
+        [FormerlySerializedAs("maxDuration")]
+        public int MaxDuration;
 
         [Header("Positioning")]
-        public Vector2 offset;
-        public Vector2 size = new Vector2(0.55f, 0.55f);
-        public Vector3 rotation;
-        public Hand hand;
+        [FormerlySerializedAs("offset")]
+        public Vector2 Offset;
+        [FormerlySerializedAs("size")]
+        public Vector2 Size = new Vector2(0.55f, 0.55f);
+        [FormerlySerializedAs("rotation")]
+        public Vector3 Rotation;
+        [FormerlySerializedAs("hand")]
+        public Hand Hand;
 
         [Header("Prizing")]
-        public PrizeData prizeData;
-        public bool isFree => prizeData.prizeItems == null || prizeData.prizeAmounts == null || prizeData.prizeItems.Length == 0;
+        [FormerlySerializedAs("prizeData")]
+        public PrizeData PrizeData;
+        public bool isFree => PrizeData.PrizeItems == null || PrizeData.PrizeAmounts == null || PrizeData.PrizeItems.Length == 0;
     }
     [System.Flags]
     public enum ItemType
@@ -45,8 +58,10 @@ namespace BenScr.MinecraftClone
     [Serializable]
     public struct PrizeData
     {
-        public ItemData[] prizeItems;
-        public int[] prizeAmounts;
+        [FormerlySerializedAs("prizeItems")]
+        public ItemData[] PrizeItems;
+        [FormerlySerializedAs("prizeAmounts")]
+        public int[] PrizeAmounts;
     }
 
     public enum Hand { Left, Right, Both }

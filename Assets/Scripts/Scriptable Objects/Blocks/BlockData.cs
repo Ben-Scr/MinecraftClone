@@ -1,8 +1,14 @@
 using System;
 using UnityEngine;
+using UnityEngine.Serialization;
 
 namespace BenScr.MinecraftClone
 {
+    public enum BlockRenderType
+    {
+        Cube = 0,
+        CustomModel = 1,
+    }
 
     [CreateAssetMenu(fileName = "BlockData", menuName = "Scriptable Objects/Blocks/Block")]
     public class BlockData : ScriptableObject
@@ -20,63 +26,100 @@ namespace BenScr.MinecraftClone
         [Serializable]
         public struct FaceTextureData
         {
-            public Sprite texture;
+            [FormerlySerializedAs("texture")]
+            public Sprite Texture;
+            public Sprite OverlayTexture;
 
-            [HideInInspector] public Vector2 uvMin;
-            [HideInInspector] public Vector2 uvMax;
+            [FormerlySerializedAs("uvMin")]
+            [HideInInspector] public Vector2 UvMin;
+            [FormerlySerializedAs("uvMax")]
+            [HideInInspector] public Vector2 UvMax;
+            [HideInInspector] public int TextureLayer;
+            [HideInInspector] public int OverlayTextureLayer;
 
             public void RebuildUvCache()
             {
-                if (texture == null || texture.texture == null)
+                if (Texture == null || Texture.texture == null)
                 {
-                    uvMin = Vector2.zero;
-                    uvMax = Vector2.one;
+                    UvMin = Vector2.zero;
+                    UvMax = Vector2.one;
                     return;
                 }
 
-                Rect rect = texture.textureRect;
-                Texture2D atlasTexture = texture.texture;
+                Rect rect = Texture.textureRect;
+                Texture2D atlasTexture = Texture.texture;
 
-                uvMin = new Vector2(rect.xMin / atlasTexture.width, rect.yMin / atlasTexture.height);
-                uvMax = new Vector2(rect.xMax / atlasTexture.width, rect.yMax / atlasTexture.height);
+                UvMin = new Vector2(rect.xMin / atlasTexture.width, rect.yMin / atlasTexture.height);
+                UvMax = new Vector2(rect.xMax / atlasTexture.width, rect.yMax / atlasTexture.height);
             }
 
             public readonly bool Matches(in FaceTextureData other)
             {
-                return uvMin == other.uvMin && uvMax == other.uvMax;
+                return TextureLayer == other.TextureLayer &&
+                       OverlayTextureLayer == other.OverlayTextureLayer;
             }
         }
 
         internal ushort id;
-        public int durability = 5;
-        public bool isTransparent;
-        public bool isFluid;
+        [FormerlySerializedAs("durability")]
+        public int Durability = 5;
+        public bool IsIndestructible;
+        [FormerlySerializedAs("isTransparent")]
+        public bool IsTransparent;
+        [FormerlySerializedAs("isFluid")]
+        public bool IsFluid;
 
-        public ItemData itemData;
+        [Header("Lighting")]
+        [Range(0, 15)]
+        public int LightEmission;
 
-        public GameObject destroyEffect;
+        [Header("Physics")]
+        public bool FallsWhenUnsupported;
+
+        [Header("Rendering")]
+        public BlockRenderType RenderType = BlockRenderType.Cube;
+        public bool IsFullBlock = true;
+        public bool RotateOnPlace;
+        public bool GenerateModelCollider = true;
+        public GameObject ModelPrefab;
+        public Material ModelMaterialOverride;
+        public Vector3 ModelPositionOffset;
+        public Vector3 ModelRotationOffset;
+        public Vector3 ModelScale = Vector3.one;
+
+        [FormerlySerializedAs("itemData")]
+        public ItemData ItemData;
+
+        [FormerlySerializedAs("destroyEffect")]
+        public GameObject DestroyEffect;
 
         [Serializable]
         private struct FaceTextureSet
         {
-            public FaceTextureData back;
-            public FaceTextureData front;
-            public FaceTextureData top;
-            public FaceTextureData bottom;
-            public FaceTextureData left;
-            public FaceTextureData right;
+            [FormerlySerializedAs("back")]
+            public FaceTextureData Back;
+            [FormerlySerializedAs("front")]
+            public FaceTextureData Front;
+            [FormerlySerializedAs("top")]
+            public FaceTextureData Top;
+            [FormerlySerializedAs("bottom")]
+            public FaceTextureData Bottom;
+            [FormerlySerializedAs("left")]
+            public FaceTextureData Left;
+            [FormerlySerializedAs("right")]
+            public FaceTextureData Right;
 
             public FaceTextureData Get(int face)
             {
                 return (BlockFace)face switch
                 {
-                    BlockFace.Back => back,
-                    BlockFace.Front => front,
-                    BlockFace.Top => top,
-                    BlockFace.Bottom => bottom,
-                    BlockFace.Left => left,
-                    BlockFace.Right => right,
-                    _ => back,
+                    BlockFace.Back => Back,
+                    BlockFace.Front => Front,
+                    BlockFace.Top => Top,
+                    BlockFace.Bottom => Bottom,
+                    BlockFace.Left => Left,
+                    BlockFace.Right => Right,
+                    _ => Back,
                 };
             }
 
@@ -85,22 +128,22 @@ namespace BenScr.MinecraftClone
                 switch ((BlockFace)face)
                 {
                     case BlockFace.Back:
-                        back = data;
+                        Back = data;
                         break;
                     case BlockFace.Front:
-                        front = data;
+                        Front = data;
                         break;
                     case BlockFace.Top:
-                        top = data;
+                        Top = data;
                         break;
                     case BlockFace.Bottom:
-                        bottom = data;
+                        Bottom = data;
                         break;
                     case BlockFace.Left:
-                        left = data;
+                        Left = data;
                         break;
                     case BlockFace.Right:
-                        right = data;
+                        Right = data;
                         break;
                 }
             }
@@ -119,6 +162,11 @@ namespace BenScr.MinecraftClone
             return faceTextures.Get(face);
         }
 
+        public bool UsesCustomModel => RenderType == BlockRenderType.CustomModel;
+
+        public bool OccludesNeighborFaces =>
+            !IsTransparent && (IsFullBlock || RenderType == BlockRenderType.Cube);
+
         public void RebuildFaceTextureCache()
         {
             for (int i = 0; i <= (int)BlockFace.Right; i++)
@@ -129,8 +177,24 @@ namespace BenScr.MinecraftClone
             }
         }
 
+        public void AssignTextureLayers(Func<Sprite, int> textureLayerResolver)
+        {
+            for (int i = 0; i <= (int)BlockFace.Right; i++)
+            {
+                FaceTextureData faceTexture = faceTextures.Get(i);
+                faceTexture.TextureLayer = textureLayerResolver != null
+                    ? textureLayerResolver(faceTexture.Texture)
+                    : 0;
+                faceTexture.OverlayTextureLayer = textureLayerResolver != null
+                    ? textureLayerResolver(faceTexture.OverlayTexture)
+                    : 0;
+                faceTextures.Set(i, faceTexture);
+            }
+        }
+
         private void OnValidate()
         {
+            LightEmission = Mathf.Clamp(LightEmission, 0, 15);
             RebuildFaceTextureCache();
         }
     }

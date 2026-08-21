@@ -7,28 +7,28 @@ namespace BenScr.MinecraftClone
         public static int GetBlockAtPosition(Vector3 worldPos) => GetBlockAtPosition(SnapPosition(worldPos));
         public static int GetBlockAtPosition(Vector3Int worldPos)
         {
-            var cx = Mathf.FloorToInt((float)worldPos.x / Chunk.CHUNK_SIZE);
-            var cy = Mathf.FloorToInt((float)worldPos.y / Chunk.CHUNK_HEIGHT);
-            var cz = Mathf.FloorToInt((float)worldPos.z / Chunk.CHUNK_SIZE);
-            var cCoord = new Vector3Int(cx, cy, cz);
+            Vector3Int chunkCoordinate = GetChunkCoordinateFromPosition(worldPos);
 
-            if (!TerrainGenerator.chunks.TryGetValue(cCoord, out var chunk))
+            if (!TerrainGenerator.Chunks.TryGetValue(chunkCoordinate, out Chunk chunk))
                 return Chunk.BLOCK_AIR;
 
-            var lx = worldPos.x - cx * Chunk.CHUNK_SIZE;
-            var ly = worldPos.y - cy * Chunk.CHUNK_HEIGHT;
-            var lz = worldPos.z - cz * Chunk.CHUNK_SIZE;
+            if (chunk.Blocks == null)
+                return Chunk.BLOCK_AIR;
+
+            int lx = worldPos.x - chunkCoordinate.x * Chunk.CHUNK_SIZE;
+            int ly = worldPos.y - chunkCoordinate.y * Chunk.CHUNK_HEIGHT;
+            int lz = worldPos.z - chunkCoordinate.z * Chunk.CHUNK_SIZE;
 
 
             if ((uint)lx >= Chunk.CHUNK_SIZE || (uint)ly >= Chunk.CHUNK_HEIGHT || (uint)lz >= Chunk.CHUNK_SIZE)
                 return Chunk.BLOCK_AIR;
 
-            return chunk.blocks[lx, ly, lz];
+            return chunk.Blocks[lx, ly, lz];
         }
 
         public static Chunk GetChunkAtCoordinate(Vector3Int chunkCoord)
         {
-            if (TerrainGenerator.chunks.TryGetValue(chunkCoord, out Chunk chunk))
+            if (TerrainGenerator.Chunks.TryGetValue(chunkCoord, out Chunk chunk))
             {
                 return chunk;
             }
@@ -39,7 +39,7 @@ namespace BenScr.MinecraftClone
         {
             Vector3Int coordinate = GetChunkCoordinateFromPosition(position);
 
-            if (TerrainGenerator.chunks.TryGetValue(new Vector3Int(coordinate.x, coordinate.y, coordinate.z), out Chunk chunk))
+            if (TerrainGenerator.Chunks.TryGetValue(coordinate, out Chunk chunk))
             {
                 return chunk;
             }
@@ -48,34 +48,58 @@ namespace BenScr.MinecraftClone
         }
         public static Chunk GetHighestChunkAt(Vector3 worldPosition)
         {
-            for (int y = 0; y < 10; y++)
-            {
-                Vector3 pos = new Vector3(worldPosition.x, y * Chunk.CHUNK_HEIGHT + worldPosition.y, worldPosition.z);
-                Chunk chunk = GetChunkAtPosition(pos);
+            int chunkX = Mathf.FloorToInt(worldPosition.x / Chunk.CHUNK_SIZE);
+            int chunkZ = Mathf.FloorToInt(worldPosition.z / Chunk.CHUNK_SIZE);
+            Chunk highestChunk = null;
 
-                if (chunk.IsTop) return GetChunkAtPosition(pos);
+            foreach (Chunk chunk in TerrainGenerator.Chunks.Values)
+            {
+                if (chunk == null ||
+                    chunk.Coordinate.x != chunkX ||
+                    chunk.Coordinate.z != chunkZ ||
+                    !chunk.IsTop)
+                {
+                    continue;
+                }
+
+                if (highestChunk == null || chunk.Coordinate.y > highestChunk.Coordinate.y)
+                    highestChunk = chunk;
             }
-            return null;
+
+            return highestChunk;
         }
 
         public static bool IsInsideChunk(Vector3Int relativePosition)
         {
-            if (relativePosition.x < 0 || relativePosition.y < 0 || relativePosition.z < 0 ||
-                relativePosition.x > Chunk.CHUNK_SIZE - 1 || relativePosition.y > Chunk.CHUNK_HEIGHT - 1 || relativePosition.z > Chunk.CHUNK_SIZE - 1)
-            {
-                return false;
-            }
-
-            return true;
+            return (uint)relativePosition.x < Chunk.CHUNK_SIZE &&
+                   (uint)relativePosition.y < Chunk.CHUNK_HEIGHT &&
+                   (uint)relativePosition.z < Chunk.CHUNK_SIZE;
         }
         public static bool HasAllNeighborChunks(Vector3Int chunkCoord)
         {
-            return TerrainGenerator.chunks.ContainsKey(chunkCoord + Vector3Int.right) &&
-                   TerrainGenerator.chunks.ContainsKey(chunkCoord + Vector3Int.left) &&
-                   TerrainGenerator.chunks.ContainsKey(chunkCoord + Vector3Int.forward) &&
-                   TerrainGenerator.chunks.ContainsKey(chunkCoord + Vector3Int.back) &&
-                   TerrainGenerator.chunks.ContainsKey(chunkCoord + Vector3Int.up) &&
-                   TerrainGenerator.chunks.ContainsKey(chunkCoord + Vector3Int.down);
+            return TerrainGenerator.Chunks.ContainsKey(chunkCoord + Vector3Int.right) &&
+                   TerrainGenerator.Chunks.ContainsKey(chunkCoord + Vector3Int.left) &&
+                   TerrainGenerator.Chunks.ContainsKey(chunkCoord + Vector3Int.forward) &&
+                   TerrainGenerator.Chunks.ContainsKey(chunkCoord + Vector3Int.back) &&
+                   TerrainGenerator.Chunks.ContainsKey(chunkCoord + Vector3Int.up) &&
+                   TerrainGenerator.Chunks.ContainsKey(chunkCoord + Vector3Int.down);
+        }
+
+        public static bool HasAllNeighborChunkData(Vector3Int chunkCoord)
+        {
+            return HasChunkData(chunkCoord + Vector3Int.right) &&
+                   HasChunkData(chunkCoord + Vector3Int.left) &&
+                   HasChunkData(chunkCoord + Vector3Int.forward) &&
+                   HasChunkData(chunkCoord + Vector3Int.back) &&
+                   HasChunkData(chunkCoord + Vector3Int.up) &&
+                   HasChunkData(chunkCoord + Vector3Int.down);
+        }
+
+        private static bool HasChunkData(Vector3Int chunkCoord)
+        {
+            return TerrainGenerator.Chunks.TryGetValue(chunkCoord, out Chunk chunk) &&
+                   chunk != null &&
+                   chunk.Blocks != null;
         }
 
         public static Vector3Int GetChunkCoordinateFromPosition(Vector3 position)
@@ -85,6 +109,22 @@ namespace BenScr.MinecraftClone
             int chunkZ = Mathf.FloorToInt(position.z / Chunk.CHUNK_SIZE);
 
             return new Vector3Int(chunkX, chunkY, chunkZ);
+        }
+
+        [System.Runtime.CompilerServices.MethodImpl(System.Runtime.CompilerServices.MethodImplOptions.AggressiveInlining)]
+        public static Vector3Int GetChunkCoordinateFromPosition(Vector3Int position)
+        {
+            return new Vector3Int(
+                FloorDivide(position.x, Chunk.CHUNK_SIZE),
+                FloorDivide(position.y, Chunk.CHUNK_HEIGHT),
+                FloorDivide(position.z, Chunk.CHUNK_SIZE));
+        }
+
+        [System.Runtime.CompilerServices.MethodImpl(System.Runtime.CompilerServices.MethodImplOptions.AggressiveInlining)]
+        private static int FloorDivide(int value, int divisor)
+        {
+            int quotient = System.Math.DivRem(value, divisor, out int remainder);
+            return remainder < 0 ? quotient - 1 : quotient;
         }
 
         public static Vector3Int SnapPosition(Vector3 position)

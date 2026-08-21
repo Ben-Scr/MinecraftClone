@@ -1,0 +1,30 @@
+%YAML 1.1
+%TAG !u! tag:unity3d.com,2011:
+--- !u!114 &11400000
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 0}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: e4eca37301cc3614aa6dbb6a555bb865, type: 3}
+  m_Name: cobweb
+  m_EditorClassIdentifier: Assembly-CSharp::BenScr.MinecraftClone.BlockItemData
+  Id: 0
+  Sprite: {fileID: 21300000, guid: b0b0c630413f4a6dedaa84b1b8283946, type: 3}
+  StackSize: 64
+  _name: cobweb
+  Description: 
+  Type: 0
+  Durable: 0
+  MaxDuration: 0
+  Offset: {x: 0, y: 0}
+  Size: {x: 0.55, y: 0.55}
+  Rotation: {x: 0, y: 0, z: 0}
+  Hand: 0
+  PrizeData:
+    PrizeItems: []
+    PrizeAmounts: 
+  Block: {fileID: 11400000, guid: f402336928f6e8193b044185bd7b973e, type: 2}

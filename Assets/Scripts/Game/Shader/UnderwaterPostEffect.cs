@@ -179,12 +179,12 @@ namespace BenScr.MinecraftClone
                 return;
             }
 
-            if (AssetsContainer.instance == null || AssetsContainer.instance.fluidMaterial == null)
+            if (AssetsContainer.Instance == null || AssetsContainer.Instance.FluidMaterial == null)
             {
                 return;
             }
 
-            Material fluidMaterial = AssetsContainer.instance.fluidMaterial;
+            Material fluidMaterial = AssetsContainer.Instance.FluidMaterial;
             if (!fluidMaterial.HasProperty("_TintColor"))
             {
                 return;

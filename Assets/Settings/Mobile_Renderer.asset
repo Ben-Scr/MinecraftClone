@@ -26,8 +26,9 @@ MonoBehaviour:
     probeSamplingDebugMesh: {fileID: 0}
     probeSamplingDebugTexture: {fileID: 0}
     probeVolumeBlendStatesCS: {fileID: 0}
-  m_RendererFeatures: []
-  m_RendererFeatureMap: 
+  m_RendererFeatures:
+  - {fileID: 7900000000000000002}
+  m_RendererFeatureMap: 020096dd2470a26d
   m_UseNativeRenderPass: 1
   postProcessData: {fileID: 11400000, guid: 41439944d30ece34e96484bdb6645b55, type: 2}
   m_AssetVersion: 2
@@ -50,3 +51,26 @@ MonoBehaviour:
   m_CopyDepthMode: 0
   m_AccurateGbufferNormals: 0
   m_IntermediateTextureMode: 0
+--- !u!114 &7900000000000000002
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 0}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: 3fc7a183d0594a6fa18d945841a370fe, type: 3}
+  m_Name: Depth-Aware Sun Shafts
+  m_EditorClassIdentifier: Assembly-CSharp::BenScr.MinecraftClone.SunShaftsRendererFeature
+  m_Active: 1
+  sunShaftsShader: {fileID: 4800000, guid: 7fc9aa247c564a7da80aaf6a287d3cf5, type: 3}
+  settings:
+    intensity: 0.55
+    maxRadius: 0.68
+    decay: 0.96
+    density: 0.88
+    exposure: 0.15
+    sampleCount: 12
+    downsample: 4
+    daylightColor: {r: 1, g: 0.7, b: 0.34, a: 1}

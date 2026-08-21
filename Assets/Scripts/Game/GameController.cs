@@ -11,19 +11,27 @@ namespace BenScr.MinecraftClone
 {
     public class GameController : MonoBehaviour
     {
+        private const float DebugHudRefreshInterval = 0.2f;
         private static HashSet<FreezeReason> freezeReasons = new HashSet<FreezeReason>();
 
-        public static bool IsFrozen => freezeReasons.Contains(FreezeReason.BGScreen);
-        public static bool IsPlayerFrozen => freezeReasons.Contains(FreezeReason.BGScreen) | freezeReasons.Contains(FreezeReason.ManualCamera);
+        public static bool IsFrozen =>
+            freezeReasons.Contains(FreezeReason.BGScreen) ||
+            freezeReasons.Contains(FreezeReason.LoadingTerrain);
+
+        public static bool IsPlayerFrozen => IsFrozen || freezeReasons.Contains(FreezeReason.ManualCamera);
 
         [SerializeField] private TextMeshProUGUI fpsTxt;
         [SerializeField] private TextMeshProUGUI playerPosTxt;
         [SerializeField] private int targetFPS = -1;
         [SerializeField] private PlayerController player;
         [SerializeField] private GameObject loadingTerrainScreen;
+        [SerializeField] private GameObject pauseScreen;
         [SerializeField] private GameObject playerUI;
 
         [SerializeField] private GameObject pauseGameScreens;
+
+        private bool isLeavingGame;
+        private float nextDebugHudRefreshTime;
 
         public static Action<FreezeReason> OnFreeze;
         public static Action<FreezeReason> OnUnFreeze;
@@ -32,15 +40,22 @@ namespace BenScr.MinecraftClone
         {
             Application.targetFrameRate = targetFPS < 0 ? 60 : targetFPS;
             freezeReasons.Clear();
-            //LoadSceneManager.Check();
+            Freeze(FreezeReason.LoadingTerrain);
+
+            if (loadingTerrainScreen != null)
+                loadingTerrainScreen.SetActive(true);
+
+            PersistentSceneManager.Check();
         }
         private void Update()
         {
-            fpsTxt.text = "FPS: " + (1f / Time.unscaledDeltaTime).ToString("0");
-            Vector3 playerPos = player.transform.position;
-            playerPosTxt.text = $"X: {playerPos.x.ToString("0")} Y: {playerPos.y.ToString("0")} Z: {playerPos.z.ToString("0")}";
+            if (Time.unscaledTime >= nextDebugHudRefreshTime)
+            {
+                UpdateDebugHud();
+                nextDebugHudRefreshTime = Time.unscaledTime + DebugHudRefreshInterval;
+            }
 
-            if (CanvasScreenManager.activeScreen?.activeInHierarchy ?? false)
+            if (CanvasScreenManager.ActiveScreen?.activeInHierarchy ?? false)
                 Freeze(FreezeReason.BGScreen);
             else
                 Unfreeze(FreezeReason.BGScreen);
@@ -51,11 +66,99 @@ namespace BenScr.MinecraftClone
             {
                 ReloadScene();
             }
+
+            if (CanvasScreenManager.ActiveScreen == null && Input.GetKeyDown(KeyCode.Escape))
+            {
+                CanvasScreenManager.Instance.OpenScreen(pauseScreen);
+            }
         }
 
-        async void ReloadScene()
+        private void UpdateDebugHud()
+        {
+            if (fpsTxt != null)
+            {
+                float frameDuration = Mathf.Max(Time.unscaledDeltaTime, 0.000001f);
+                fpsTxt.SetText("FPS: {0:0}", 1f / frameDuration);
+            }
+
+            if (playerPosTxt != null && player != null)
+            {
+                Vector3 playerPos = player.transform.position;
+                playerPosTxt.SetText(
+                    "X: {0:0} Y: {1:0} Z: {2:0}",
+                    playerPos.x,
+                    playerPos.y,
+                    playerPos.z);
+            }
+        }
+
+        private void ReloadScene()
         {
             SceneManager.LoadScene(SceneManager.GetActiveScene().buildIndex);
+        }
+
+        public void ClosePauseScreen()
+        {
+            CanvasScreenManager.Instance.CloseActiveScreen();
+        }
+        public async void LoadMenuScene()
+        {
+            if (isLeavingGame)
+                return;
+
+            isLeavingGame = true;
+            Freeze(FreezeReason.LoadingTerrain);
+
+            if (loadingTerrainScreen != null)
+                loadingTerrainScreen.SetActive(true);
+
+            UnityEngine.Debug.Log("Saving world...");
+            await System.Threading.Tasks.Task.Yield();
+
+            SaveController.OperationResult saveResult;
+            try
+            {
+                saveResult = await SaveController.TrySaveWorldAsync();
+            }
+            catch (Exception ex)
+            {
+                saveResult = SaveController.OperationResult.Failed(ex.Message);
+            }
+
+            if (!saveResult.Success)
+            {
+                UnityEngine.Debug.LogError(saveResult.Error);
+                isLeavingGame = false;
+                Unfreeze(FreezeReason.LoadingTerrain);
+
+                if (loadingTerrainScreen != null)
+                    loadingTerrainScreen.SetActive(false);
+
+                return;
+            }
+
+            try
+            {
+                await PersistentSceneManager.UnLoadAndLoadScene(SceneType.Game, SceneType.Menu);
+            }
+            catch (Exception ex)
+            {
+                UnityEngine.Debug.LogError($"Failed to return to the menu: {ex.Message}");
+                isLeavingGame = false;
+                Unfreeze(FreezeReason.LoadingTerrain);
+
+                if (loadingTerrainScreen != null)
+                    loadingTerrainScreen.SetActive(false);
+            }
+        }
+
+        private void OnApplicationQuit()
+        {
+            if (isLeavingGame)
+                return;
+
+            if (!SaveController.TrySaveWorld(out string error))
+                UnityEngine.Debug.LogError(error);
         }
 
         public static void Freeze(FreezeReason reason)
@@ -92,6 +195,7 @@ namespace BenScr.MinecraftClone
             playerUI.gameObject.SetActive(true);
             loadingTerrainScreen.gameObject.SetActive(false);
             RenderSettings.fog = true;
+            Unfreeze(FreezeReason.LoadingTerrain);
         }
     }
 
@@ -102,6 +206,7 @@ namespace BenScr.MinecraftClone
         Cutscene,
         BGScreen,
         Inventory,
-        ManualCamera
+        ManualCamera,
+        LoadingTerrain
     }
 }

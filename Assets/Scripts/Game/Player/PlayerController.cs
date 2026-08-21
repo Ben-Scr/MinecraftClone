@@ -1,5 +1,6 @@
 using System;
 using UnityEngine;
+using UnityEngine.Serialization;
 using static BenScr.MinecraftClone.SettingsContainer;
 
 namespace BenScr.MinecraftClone
@@ -20,7 +21,7 @@ namespace BenScr.MinecraftClone
     public class PlayerController : MonoBehaviour
     {
         [Header("Movement")]
-        public GameMode gameMode = GameMode.Survival;
+        public GameMode GameMode = GameMode.Survival;
 
         [SerializeField] private float walkSpeed = 5f;
         [SerializeField] private float runSpeed = 8f;
@@ -42,7 +43,8 @@ namespace BenScr.MinecraftClone
         [SerializeField] private float flyAcceleration = 5f;
 
         private float curFlySpeedMultiplier = 1;
-        public bool isFlying;
+        [FormerlySerializedAs("isFlying")]
+        public bool IsFlying;
 
 
         [Header("Physics")]
@@ -58,22 +60,39 @@ namespace BenScr.MinecraftClone
         [SerializeField] private float swimLerpSpeed = 5f;
         [SerializeField] private float swimDrag = 3f;
         [SerializeField] private float swimAngularDrag = 1.5f;
+        [SerializeField] private float swimSurfaceSinkSpeed = 0.75f;
+        [SerializeField] private float swimSurfacePushSpeed = 6f;
+        [SerializeField] private float swimSurfaceJumpForceMultiplier = 0.75f;
+        [SerializeField] private float swimSurfacePushMinSubmersion = 0.9f;
+        [SerializeField] private float swimSurfacePushCooldown = 0.35f;
 
         [SerializeField] private float gravity;
         private UnderwaterPostEffect underwaterEffect;
         internal bool isHeadInFluid;
         private bool isInFluid;
         internal BlockData currentFluidBlock;
+        private bool hasFluidSurface;
+        private float currentFluidSurfaceY;
+        private float nextSurfaceSwimPushTime;
         private float defaultDrag;
         private float defaultAngularDrag;
 
         private Rigidbody rb;
         private CapsuleCollider capsuleCollider;
+        private int groundCollisionMask;
 
         private float inputSpace = 0;
-        public static PlayerController instance;
+        public static PlayerController Instance { get; private set; }
 
         public static Action<GameMode> OnSwitchGameMode;
+
+        internal Quaternion SavedBodyRotation => playerMeshTr != null
+            ? playerMeshTr.rotation
+            : transform.rotation;
+
+        internal Quaternion SavedCameraRotation => playerCamera != null
+            ? playerCamera.transform.rotation
+            : SavedBodyRotation;
 
         private static readonly Vector3[] fluidCheckDirections = new Vector3[]
         {
@@ -88,13 +107,14 @@ namespace BenScr.MinecraftClone
 
         private void Awake()
         {
-            instance = this;
+            Instance = this;
 
             if (playerCamera == null)
                 playerCamera = GetComponentInChildren<Camera>();
 
             rb = GetComponent<Rigidbody>();
             capsuleCollider = GetComponentInChildren<CapsuleCollider>();
+            groundCollisionMask = ~LayerMask.GetMask("Player");
             Cursor.lockState = CursorLockMode.Locked;
             Cursor.visible = false;
 
@@ -114,13 +134,19 @@ namespace BenScr.MinecraftClone
             {
                 defaultDrag = rb.linearDamping;
                 defaultAngularDrag = rb.angularDamping;
+                rb.useGravity = false;
             }
+
+            ApplyGameModeState(resetVelocity: false);
         }
 
         private void OnEnable()
         {
             GameController.OnFreeze += OnPlayerFreeze;
             GameController.OnUnFreeze += OnPlayerUnFreeze;
+
+            if (GameController.IsPlayerFrozen)
+                OnPlayerFreeze(FreezeReason.LoadingTerrain);
         }
         private void OnDisable()
         {
@@ -138,8 +164,7 @@ namespace BenScr.MinecraftClone
         {
 
             if (!GameController.IsPlayerFrozen)
-                rb.constraints = isFlying && gameMode == GameMode.Spectator ? RigidbodyConstraints.FreezeAll : RigidbodyConstraints.FreezeRotation;
-            ;
+                ApplyGameModeState(resetVelocity: false);
         }
 
         public void Update()
@@ -171,39 +196,59 @@ namespace BenScr.MinecraftClone
                 );
         }
 
+        internal void RestoreSavedTransform(
+            Vector3 position,
+            Quaternion bodyRotation,
+            Quaternion cameraRotation)
+        {
+            transform.position = position;
+
+            if (playerMeshTr != null)
+                playerMeshTr.rotation = bodyRotation;
+            else
+                transform.rotation = bodyRotation;
+
+            if (playerCamera != null)
+                playerCamera.transform.rotation = cameraRotation;
+
+            if (rb != null)
+            {
+                rb.position = position;
+                rb.linearVelocity = Vector3.zero;
+                rb.angularVelocity = Vector3.zero;
+            }
+        }
+
         private void Movement()
         {
             Vector3 input = GetInput();
 
 
-            if (!isGrounded && !isInFluid)
+            if (GameMode != GameMode.Spectator)
             {
-                rb.linearVelocity = new Vector2(rb.linearVelocity.x, rb.linearVelocity.y - gravity * Time.deltaTime);
-            }
-
-            if (gameMode != GameMode.Spectator)
-            {
-                if (isInFluid && !isFlying)
+                if (isInFluid && !IsFlying)
                 {
                     Vector3 currentVelocity = rb.linearVelocity;
                     Vector3 targetVelocity = new Vector3(input.x, input.y, input.z);
 
                     bool isTryingToSwimUp = Input.GetKey(KeyCode.Space);
-                    if (!isHeadInFluid && targetVelocity.y > 0f && !isTryingToSwimUp)
+                    if (!isHeadInFluid)
                     {
-                        targetVelocity.y = 0f;
-                        currentVelocity.y = Mathf.Min(currentVelocity.y, 0f);
+                        if (isTryingToSwimUp && TryApplySurfaceSwimPush(ref currentVelocity))
+                        {
+                            targetVelocity.y = -Mathf.Abs(swimSurfaceSinkSpeed);
+                        }
+                        else if (targetVelocity.y > 0f)
+                        {
+                            targetVelocity.y = -Mathf.Abs(swimSurfaceSinkSpeed);
+                        }
                     }
 
-                    Vector3 blendedVelocity = Vector3.Lerp(currentVelocity, targetVelocity, Time.deltaTime * swimLerpSpeed);
-                    blendedVelocity.y = Mathf.Clamp(blendedVelocity.y, -swimVerticalSpeed, swimVerticalSpeed);
-                    rb.linearVelocity = blendedVelocity;
+                    rb.linearVelocity = BlendFluidVelocity(currentVelocity, targetVelocity);
                 }
                 else
                 {
-                    float velocityY = Mathf.Clamp(isFlying ? input.y : rb.linearVelocity.y, minVelocityY, maxVelocityY);
-                    input.y = velocityY;
-                    rb.linearVelocity = input;
+                    rb.linearVelocity = GetMovementVelocity(input);
                 }
             }
             else
@@ -216,9 +261,9 @@ namespace BenScr.MinecraftClone
                 Jump();
             }
 
-            if (Input.GetKeyDown(KeyCode.Space) && gameMode == GameMode.Creative)
+            if (Input.GetKeyDown(KeyCode.Space) && GameMode == GameMode.Creative)
             {
-                if (gameMode != GameMode.Spectator && inputSpace < doubleSpaceThreshold)
+                if (GameMode != GameMode.Spectator && inputSpace < doubleSpaceThreshold)
                 {
                     SetFlyingMode();
                 }
@@ -230,21 +275,52 @@ namespace BenScr.MinecraftClone
 
             if (Input.GetKeyDown(KeyCode.F1))
             {
-                SetSpectatorMode();
+                SetGameMode(GameMode == GameMode.Spectator ? GameMode.Survival : GameMode.Spectator);
+            }
+            if (Input.GetKeyDown(KeyCode.F2))
+            {
+                SetGameMode(GameMode.Creative);
             }
 
-
-            if (!isFlying && !isInFluid && isGrounded && rb.linearVelocity.magnitude < 0.1f)
+            if (!IsFlying && !isInFluid && isGrounded && rb.linearVelocity.magnitude < 0.1f)
             {
                 rb.linearVelocity = Vector3.zero;
             }
         }
 
+        private Vector3 GetMovementVelocity(Vector3 input)
+        {
+            if (IsFlying)
+            {
+                input.y = Mathf.Clamp(input.y, minVelocityY, maxVelocityY);
+                return input;
+            }
+
+            Vector3 velocity = rb.linearVelocity;
+            velocity.x = input.x;
+            velocity.z = input.z;
+
+            if (!isGrounded)
+            {
+                velocity.y -= gravity * Time.deltaTime;
+            }
+            else if (velocity.y < 0f)
+            {
+                velocity.y = 0f;
+            }
+
+            velocity.y = Mathf.Clamp(velocity.y, minVelocityY, maxVelocityY);
+            return velocity;
+        }
+
         public void SetFlyingMode()
         {
-            isFlying = !isFlying;
+            if (GameMode != GameMode.Creative)
+                return;
 
-            if (isFlying)
+            IsFlying = !IsFlying;
+
+            if (IsFlying)
             {
                 rb.linearVelocity = new Vector3(0, 0, 0);
                 curFlySpeedMultiplier = 1;
@@ -253,25 +329,58 @@ namespace BenScr.MinecraftClone
             else
             {
                 rb.linearVelocity = new Vector3(rb.linearVelocity.x, 0, rb.linearVelocity.z);
-                rb.useGravity = !isInFluid;
+                rb.useGravity = false;
             }
+        }
+
+        public void SetGameMode(GameMode targetGameMode)
+        {
+            if (GameMode == targetGameMode)
+            {
+                ApplyGameModeState(resetVelocity: false);
+                OnSwitchGameMode?.Invoke(GameMode);
+                return;
+            }
+
+            GameMode = targetGameMode;
+            ApplyGameModeState(resetVelocity: true);
+            OnSwitchGameMode?.Invoke(GameMode);
         }
 
         public void SetSpectatorMode()
         {
-            isFlying = gameMode == GameMode.Spectator ? false : true;
+            SetGameMode(GameMode == GameMode.Spectator ? GameMode.Survival : GameMode.Spectator);
+        }
 
-            capsuleCollider.enabled = !isFlying;
-            rb.constraints = isFlying ? RigidbodyConstraints.FreezeAll : RigidbodyConstraints.FreezeRotation;
+        private void ApplyGameModeState(bool resetVelocity)
+        {
+            bool isSpectator = GameMode == GameMode.Spectator;
 
-            gameMode = gameMode == GameMode.Spectator ? GameMode.Survival : GameMode.Spectator;
+            if (isSpectator)
+                IsFlying = true;
+            else if (GameMode != GameMode.Creative)
+                IsFlying = false;
 
-            OnSwitchGameMode?.Invoke(gameMode);
+            if (capsuleCollider != null)
+                capsuleCollider.enabled = !isSpectator;
+
+            if (rb == null)
+                return;
+
+            rb.constraints = isSpectator ? RigidbodyConstraints.FreezeAll : RigidbodyConstraints.FreezeRotation;
+            rb.useGravity = false;
+
+            if (resetVelocity)
+            {
+                rb.linearVelocity = Vector3.zero;
+                rb.angularVelocity = Vector3.zero;
+                curFlySpeedMultiplier = 1f;
+            }
         }
 
         public void Jump()
         {
-            if (isInFluid && !isFlying)
+            if (isInFluid && !IsFlying)
             {
                 rb.linearVelocity = new Vector3(rb.linearVelocity.x, swimVerticalSpeed, rb.linearVelocity.z);
             }
@@ -283,7 +392,11 @@ namespace BenScr.MinecraftClone
 
         public bool IsGrounded()
         {
-            return Physics.CheckBox(transform.position + groundedOffset, groundedSize / 2f, Quaternion.identity, ~LayerMask.GetMask("Player"));
+            return Physics.CheckBox(
+                transform.position + groundedOffset,
+                groundedSize / 2f,
+                Quaternion.identity,
+                groundCollisionMask);
         }
 
         public Vector3 GetInput()
@@ -297,7 +410,7 @@ namespace BenScr.MinecraftClone
                 moveInput.Normalize();
             }
 
-            if (isInFluid && !isFlying)
+            if (isInFluid && !IsFlying)
             {
                 Vector3 velocity = moveInput * swimSpeed;
 
@@ -315,7 +428,7 @@ namespace BenScr.MinecraftClone
                 }
                 if (!ascend && !descend)
                 {
-                    vertical = isHeadInFluid ? swimBuoyancy : 0f;
+                    vertical = isHeadInFluid ? swimBuoyancy : -Mathf.Abs(swimSurfaceSinkSpeed);
                 }
 
 
@@ -325,7 +438,7 @@ namespace BenScr.MinecraftClone
 
             float speed = 0f;
 
-            if (isFlying)
+            if (IsFlying)
             {
                 if (Input.GetKey(KeyCode.Space))
                     moveInput.y += 1;
@@ -357,8 +470,9 @@ namespace BenScr.MinecraftClone
             bool wasInFluid = isInFluid;
             isInFluid = TryGetFluidBlock(out currentFluidBlock);
             isHeadInFluid = CheckHeadInFluid();
+            hasFluidSurface = isInFluid && TryGetFluidSurfaceY(out currentFluidSurfaceY);
 
-            if (isFlying)
+            if (IsFlying)
             {
                 return;
             }
@@ -377,12 +491,108 @@ namespace BenScr.MinecraftClone
 
         private void ExitFluid()
         {
-            rb.useGravity = !isFlying;
+            rb.useGravity = false;
             rb.linearDamping = defaultDrag;
             rb.angularDamping = defaultAngularDrag;
             currentFluidBlock = null;
             isInFluid = false;
             isHeadInFluid = false;
+            hasFluidSurface = false;
+        }
+
+        private Vector3 BlendFluidVelocity(Vector3 currentVelocity, Vector3 targetVelocity)
+        {
+            float blend = Mathf.Clamp01(Time.deltaTime * swimLerpSpeed);
+            Vector3 blendedVelocity = Vector3.Lerp(currentVelocity, targetVelocity, blend);
+
+            float minVerticalSpeed = currentVelocity.y < -swimVerticalSpeed
+                ? currentVelocity.y
+                : -swimVerticalSpeed;
+            float surfacePushSpeed = GetSurfaceSwimPushSpeed();
+            float maxVerticalSpeed = Mathf.Max(swimVerticalSpeed, surfacePushSpeed);
+
+            blendedVelocity.y = Mathf.Clamp(blendedVelocity.y, minVerticalSpeed, maxVerticalSpeed);
+            return blendedVelocity;
+        }
+
+        private bool TryApplySurfaceSwimPush(ref Vector3 currentVelocity)
+        {
+            if (Time.time < nextSurfaceSwimPushTime)
+            {
+                return false;
+            }
+
+            if (currentVelocity.y < -swimVerticalSpeed)
+            {
+                return false;
+            }
+
+            if (GetFluidSubmersionDepth() < swimSurfacePushMinSubmersion)
+            {
+                return false;
+            }
+
+            currentVelocity.y = Mathf.Max(currentVelocity.y, GetSurfaceSwimPushSpeed());
+            nextSurfaceSwimPushTime = Time.time + swimSurfacePushCooldown;
+            return true;
+        }
+
+        private float GetSurfaceSwimPushSpeed()
+        {
+            return Mathf.Max(swimSurfacePushSpeed, jumpForce * swimSurfaceJumpForceMultiplier);
+        }
+
+        private float GetFluidSubmersionDepth()
+        {
+            if (!hasFluidSurface || capsuleCollider == null)
+            {
+                return 0f;
+            }
+
+            Bounds bounds = capsuleCollider.bounds;
+            return Mathf.Clamp(currentFluidSurfaceY - bounds.min.y, 0f, bounds.size.y);
+        }
+
+        private bool TryGetFluidSurfaceY(out float surfaceY)
+        {
+            surfaceY = float.NegativeInfinity;
+
+            if (capsuleCollider == null)
+            {
+                return false;
+            }
+
+            Bounds bounds = capsuleCollider.bounds;
+            Vector3 center = bounds.center;
+            float horizontalExtent = Mathf.Min(bounds.extents.x, bounds.extents.z) * 0.8f;
+            int minY = Mathf.FloorToInt(bounds.min.y - 0.05f);
+            int maxY = Mathf.FloorToInt(bounds.max.y + 0.05f);
+
+            for (int i = 0; i < fluidCheckDirections.Length; i++)
+            {
+                Vector3 dir = fluidCheckDirections[i];
+
+                if (dir.y != 0f)
+                {
+                    continue;
+                }
+
+                float sampleX = center.x + dir.x * horizontalExtent;
+                float sampleZ = center.z + dir.z * horizontalExtent;
+
+                for (int y = maxY; y >= minY; y--)
+                {
+                    Vector3 samplePoint = new Vector3(sampleX, y + 0.5f, sampleZ);
+
+                    if (IsPositionInFluid(samplePoint))
+                    {
+                        surfaceY = Mathf.Max(surfaceY, y + 1f);
+                        break;
+                    }
+                }
+            }
+
+            return surfaceY > float.NegativeInfinity;
         }
 
         private bool CheckHeadInFluid()
@@ -411,8 +621,13 @@ namespace BenScr.MinecraftClone
                 return false;
             }
 
+            if (AssetsContainer.Instance == null)
+            {
+                return false;
+            }
+
             BlockData block = AssetsContainer.GetBlock(blockId);
-            return block != null && block.isFluid;
+            return block != null && block.IsFluid;
         }
 
 
@@ -420,7 +635,7 @@ namespace BenScr.MinecraftClone
         {
             fluidBlock = null;
 
-            if (AssetsContainer.instance == null)
+            if (AssetsContainer.Instance == null)
             {
                 return false;
             }
@@ -450,7 +665,7 @@ namespace BenScr.MinecraftClone
 
                 BlockData block = AssetsContainer.GetBlock(blockId);
 
-                if (block != null && block.isFluid)
+                if (block != null && block.IsFluid)
                 {
                     fluidBlock = block;
                     return true;
